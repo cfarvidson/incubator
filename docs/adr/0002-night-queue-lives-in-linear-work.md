@@ -1,0 +1,3 @@
+# The Night Queue lives in the Linear work workspace, regardless of the target repo's own tracker
+
+Target repos have their own tracker configs (kurir-ios and sapling point at GitHub Issues), so it may look like a bug that GitHub-labelled `ready-for-agent` issues are never picked up overnight. It is deliberate: v1 has exactly one Night Queue - Linear (work) issues assigned to me, state Todo, label `ready-for-agent`, across all teams - because one queue means one place to prepare and one place to follow up, and the Linear MCP is verified to work headless. Feeding the queue from a GitHub issue is a manual "lift to Linear" step; per-repo GitHub queues are a possible later extension, not an oversight.
