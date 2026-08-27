@@ -1,3 +1,4 @@
+import { RateLimitError } from "../core/rate-limit.js";
 import type { Card, LinearPort } from "../core/types.js";
 
 /** The Night Queue filter per ADR-0002: assigned to me + Todo + label `ready-for-agent`, any team. */
@@ -122,10 +123,19 @@ export function makeLinearPort(): LinearPort {
       headers: { "Content-Type": "application/json", Authorization: apiKey! },
       body: JSON.stringify({ query, variables }),
     });
+    if (response.status === 429) {
+      throw new RateLimitError("Linear API rate limited (429)");
+    }
     if (!response.ok) {
       throw new Error(`Linear API request failed: ${response.status} ${await response.text()}`);
     }
-    const json = (await response.json()) as { errors?: { message: string }[]; data?: T };
+    const json = (await response.json()) as {
+      errors?: { message: string; extensions?: { code?: string } }[];
+      data?: T;
+    };
+    if (json.errors?.some((e) => e.extensions?.code === "RATELIMITED")) {
+      throw new RateLimitError("Linear API rate limited (RATELIMITED)");
+    }
     if (json.errors?.length || !json.data) {
       throw new Error(`Linear API error: ${json.errors?.map((e) => e.message).join("; ") ?? "no data"}`);
     }

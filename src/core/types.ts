@@ -66,6 +66,13 @@ export interface MorningReport {
   ran: RanCard[];
   /** Every Bounced Card - at Plan time or after a failed/timed-out session. */
   bounced: BouncedCard[];
+  /** Runnable Cards never started because the Stop Time was reached; they stay in the Night Queue. */
+  notStarted: Card[];
+}
+
+export interface ClockPort {
+  now(): Date;
+  sleep(ms: number): Promise<void>;
 }
 
 export interface ReportPort {
@@ -76,4 +83,12 @@ export interface RunDeps extends PlanDeps {
   linear: LinearPort;
   executor: CardExecutorPort;
   report: ReportPort;
+  clock: ClockPort;
+  /** The one chance to abort after seeing the Plan: false runs nothing (CFA-170). */
+  confirm(plan: Plan): Promise<boolean>;
+}
+
+export interface RunOptions {
+  /** Stop Time as HH:MM - no new Card starts once the clock passes it. */
+  stopTime: string;
 }

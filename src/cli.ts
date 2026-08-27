@@ -1,3 +1,4 @@
+import { createInterface } from "node:readline/promises";
 import { makeCloneResolver } from "./adapters/clone-resolver.js";
 import { makeCardExecutor } from "./adapters/executor.js";
 import { makeLinearPort } from "./adapters/linear.js";
@@ -5,37 +6,12 @@ import { makeReportWriter } from "./adapters/report.js";
 import { loadConfig } from "./config.js";
 import { planNight } from "./core/plan.js";
 import { runNight } from "./core/run.js";
+import type { Plan } from "./core/types.js";
 
 const PRIORITY_NAMES: Record<number, string> = { 0: "none", 1: "urgent", 2: "high", 3: "medium", 4: "low" };
 
-async function main() {
-  const config = loadConfig();
-  const linear = makeLinearPort();
-  const resolveClone = makeCloneResolver(config.cloneRoots);
-
-  if (process.argv.includes("--run")) {
-    const report = await runNight({
-      linear,
-      resolveClone,
-      executor: makeCardExecutor(),
-      report: makeReportWriter(),
-    });
-    console.log("\nNight Run finished.");
-    for (const entry of report.ran) {
-      console.log(`  ran ${entry.card.identifier} ${entry.card.title}`);
-      for (const url of entry.prUrls) console.log(`    ${url}`);
-    }
-    for (const b of report.bounced) {
-      console.log(`  bounced ${b.card.identifier}: ${b.reason}`);
-    }
-    if (report.ran.length === 0) console.log("  No Card ran.");
-    console.log("  Morning Report written under nights/.");
-    return;
-  }
-
-  const plan = await planNight({ linear, resolveClone });
-
-  console.log("Tonight's Plan (dry-run - nothing has been touched)\n");
+function printPlan(plan: Plan) {
+  console.log("Tonight's Plan\n");
 
   if (plan.runnable.length === 0) {
     console.log("  Nothing runnable in the Night Queue.");
@@ -54,10 +30,68 @@ async function main() {
       console.log(`    ${b.reason}`);
     }
   }
+}
 
-  console.log(
-    `\n  ${plan.runnable.length} runnable, ${plan.bounced.length} bounced. No Linear writes, no sessions, no worktrees.`,
+async function askToStart(): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await rl.question("\nStart the Night Run? [y/N] ");
+  rl.close();
+  return /^y(es)?$/i.test(answer.trim());
+}
+
+async function main() {
+  const config = loadConfig();
+  const linear = makeLinearPort();
+  const resolveClone = makeCloneResolver(config.cloneRoots);
+
+  if (process.argv.includes("--dry-run")) {
+    const plan = await planNight({ linear, resolveClone });
+    printPlan(plan);
+    console.log(
+      `\n  ${plan.runnable.length} runnable, ${plan.bounced.length} bounced. No Linear writes, no sessions, no worktrees.`,
+    );
+    return;
+  }
+
+  const report = await runNight(
+    {
+      linear,
+      resolveClone,
+      executor: makeCardExecutor({
+        maxCardDurationMs: config.maxCardDurationMinutes * 60_000,
+        model: config.model,
+      }),
+      report: makeReportWriter(),
+      clock: {
+        now: () => new Date(),
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      },
+      confirm: async (plan) => {
+        printPlan(plan);
+        return askToStart();
+      },
+    },
+    { stopTime: config.stopTime },
   );
+
+  if (!report) {
+    console.log("\nAborted. No Linear writes, no sessions, no worktrees.");
+    return;
+  }
+
+  console.log("\nNight Run finished.");
+  for (const entry of report.ran) {
+    console.log(`  ran ${entry.card.identifier} ${entry.card.title}`);
+    for (const url of entry.prUrls) console.log(`    ${url}`);
+  }
+  for (const b of report.bounced) {
+    console.log(`  bounced ${b.card.identifier}: ${b.reason}`);
+  }
+  for (const c of report.notStarted) {
+    console.log(`  not started (Stop Time reached): ${c.identifier} ${c.title}`);
+  }
+  if (report.ran.length === 0) console.log("  No Card ran.");
+  console.log("  Morning Report written under nights/.");
 }
 
 main().catch((error) => {

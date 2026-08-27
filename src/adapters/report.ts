@@ -25,6 +25,12 @@ export function makeReportWriter(): ReportPort {
           lines.push(`- ${b.card.identifier} ${b.card.title}: ${b.reason}`);
         }
       }
+      if (report.notStarted.length > 0) {
+        lines.push("", "## Not started (Stop Time reached)", "");
+        for (const c of report.notStarted) {
+          lines.push(`- ${c.identifier} ${c.title}`);
+        }
+      }
       mkdirSync(NIGHTS_DIR, { recursive: true });
       writeFileSync(join(NIGHTS_DIR, `${date}.md`), lines.join("\n") + "\n");
     },

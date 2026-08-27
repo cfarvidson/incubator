@@ -1,3 +1,6 @@
 {
-  "cloneRoots": ["~/code", "~/code/TV4"]
+  "cloneRoots": ["~/code", "~/code/TV4"],
+  "maxCardDurationMinutes": 120,
+  "stopTime": "07:00",
+  "model": null
 }

@@ -2,6 +2,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { RateLimitError } from "../core/rate-limit.js";
 import type { CardExecutorPort, CardSessionResult, RunnableCard } from "../core/types.js";
 
 /**
@@ -63,15 +64,30 @@ function sessionPrompt(runnable: RunnableCard): string {
   ].join("\n");
 }
 
-/** Per-Card duration cap: a stuck session is stopped and its Card Bounced (default 2h). */
-const DEFAULT_MAX_CARD_DURATION_MS = 2 * 60 * 60 * 1000;
+export interface ExecutorOptions {
+  /** The Duration Cap: a stuck session is stopped and its Card Bounced. */
+  maxCardDurationMs: number;
+  /** Model for Card Sessions; null means the Claude CLI's own default. */
+  model: string | null;
+}
 
-export function makeCardExecutor(maxCardDurationMs = DEFAULT_MAX_CARD_DURATION_MS): CardExecutorPort {
+/**
+ * When the CLI reports rate limiting or exhausted quota, the whole session is
+ * retried after the core's backoff; only phrases the CLI itself emits are
+ * matched, on a failed exit, to avoid mistaking session chatter for a limit.
+ */
+const RATE_LIMIT_OUTPUT = /usage limit reached|rate limit/i;
+
+export function makeCardExecutor(options: ExecutorOptions): CardExecutorPort {
+  // Worktrees this run created: a rate-limited session may resume in its own
+  // worktree, but a leftover from an earlier night stays a hard error.
+  const ownWorktrees = new Set<string>();
   return {
     async execute(runnable: RunnableCard): Promise<CardSessionResult> {
       try {
-        return await runSession(runnable, maxCardDurationMs);
+        return await runSession(runnable, options, ownWorktrees);
       } catch (error) {
+        if (error instanceof RateLimitError) throw error;
         return { kind: "failure", reason: error instanceof Error ? error.message : String(error) };
       }
     },
@@ -82,6 +98,8 @@ interface SessionExit {
   timedOut: boolean;
   status: number | null;
   signal: NodeJS.Signals | null;
+  /** The tail of the session's combined output, for rate-limit detection. */
+  outputTail: string;
 }
 
 /**
@@ -91,7 +109,16 @@ interface SessionExit {
  */
 function spawnClaudeSession(args: string[], cwd: string, maxCardDurationMs: number): Promise<SessionExit> {
   return new Promise((resolve, reject) => {
-    const child = spawn("claude", args, { cwd, stdio: "inherit", detached: true });
+    const child = spawn("claude", args, { cwd, stdio: ["inherit", "pipe", "pipe"], detached: true });
+    let outputTail = "";
+    const passThrough = (from: NodeJS.ReadableStream, to: NodeJS.WritableStream) => {
+      from.on("data", (chunk: Buffer) => {
+        to.write(chunk);
+        outputTail = (outputTail + chunk.toString()).slice(-8192);
+      });
+    };
+    passThrough(child.stdout!, process.stdout);
+    passThrough(child.stderr!, process.stderr);
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
@@ -107,33 +134,40 @@ function spawnClaudeSession(args: string[], cwd: string, maxCardDurationMs: numb
     });
     child.once("exit", (status, signal) => {
       clearTimeout(timer);
-      resolve({ timedOut, status, signal });
+      resolve({ timedOut, status, signal, outputTail });
     });
   });
 }
 
-async function runSession(runnable: RunnableCard, maxCardDurationMs: number): Promise<CardSessionResult> {
+async function runSession(
+  runnable: RunnableCard,
+  options: ExecutorOptions,
+  ownWorktrees: Set<string>,
+): Promise<CardSessionResult> {
   const { card, clonePath } = runnable;
   const worktreePath = `${clonePath}-${card.identifier.toLowerCase()}`;
-  if (existsSync(worktreePath)) {
+  if (existsSync(worktreePath) && !ownWorktrees.has(worktreePath)) {
     throw new Error(`Worktree already exists at ${worktreePath}; remove it or finish that run first`);
   }
 
-  git(clonePath, ["fetch", "origin"]);
-  const base = ["origin/main", "origin/master"].find((ref) => {
-    try {
-      git(clonePath, ["rev-parse", "--verify", ref]);
-      return true;
-    } catch {
-      return false;
-    }
-  });
-  if (!base) throw new Error(`${clonePath} has neither origin/main nor origin/master`);
-  git(clonePath, ["worktree", "add", "-b", card.branchName, worktreePath, base]);
+  if (!ownWorktrees.has(worktreePath)) {
+    git(clonePath, ["fetch", "origin"]);
+    const base = ["origin/main", "origin/master"].find((ref) => {
+      try {
+        git(clonePath, ["rev-parse", "--verify", ref]);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (!base) throw new Error(`${clonePath} has neither origin/main nor origin/master`);
+    git(clonePath, ["worktree", "add", "-b", card.branchName, worktreePath, base]);
 
-  // The pre-push guard applies only to this worktree, never the user's own checkout.
-  git(clonePath, ["config", "extensions.worktreeConfig", "true"]);
-  git(worktreePath, ["config", "--worktree", "core.hooksPath", HOOKS_DIR]);
+    // The pre-push guard applies only to this worktree, never the user's own checkout.
+    git(clonePath, ["config", "extensions.worktreeConfig", "true"]);
+    git(worktreePath, ["config", "--worktree", "core.hooksPath", HOOKS_DIR]);
+    ownWorktrees.add(worktreePath);
+  }
 
   const session = await spawnClaudeSession(
     [
@@ -143,17 +177,21 @@ async function runSession(runnable: RunnableCard, maxCardDurationMs: number): Pr
       ALLOWED_TOOLS.join(","),
       "--disallowedTools",
       DISALLOWED_TOOLS.join(","),
+      ...(options.model ? ["--model", options.model] : []),
     ],
     worktreePath,
-    maxCardDurationMs,
+    options.maxCardDurationMs,
   );
   if (session.timedOut) {
     return {
       kind: "timeout",
-      reason: `Card Session for ${card.identifier} hit the ${maxCardDurationMs / 3_600_000}h duration cap and was stopped`,
+      reason: `Card Session for ${card.identifier} hit the ${options.maxCardDurationMs / 3_600_000}h duration cap and was stopped`,
     };
   }
   if (session.status !== 0) {
+    if (RATE_LIMIT_OUTPUT.test(session.outputTail)) {
+      throw new RateLimitError(`Card Session for ${card.identifier} reported rate limiting or exhausted quota`);
+    }
     const how = session.status === null ? `was killed by ${session.signal}` : `exited with status ${session.status}`;
     throw new Error(`Card Session for ${card.identifier} ${how}`);
   }
