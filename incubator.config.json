@@ -2,5 +2,9 @@
   "cloneRoots": ["~/code", "~/code/TV4"],
   "durationCapMinutes": 120,
   "stopTime": "07:00",
-  "model": null
+  "model": null,
+  "claudes": {
+    "dclaude": {},
+    "wclaude": { "env": { "CLAUDE_CONFIG_DIR": "~/.claude-work" } }
+  }
 }
