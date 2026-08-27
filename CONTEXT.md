@@ -35,11 +35,17 @@ Moving a Card from Todo to In Progress when the Runner picks it up, so no other 
 **Bounce**:
 Returning a Card to Todo with the `needs-info` label and an explanatory comment instead of (or after failing at) running it.
 
+**Excluded**:
+A Card left out of a Night Run at Plan time because its team is not onboarded (it has no `needs-info` label, so not even a Bounce could land). Excluded Cards get no Linear writes at all; they are listed in the Plan and the Morning Report with the reason.
+
+**Onboarded team**:
+A Linear team the Runner can serve: it has the labels `ready-for-agent` and `needs-info`, and the states Todo, In Progress, and In Review.
+
 **Plan**:
-The terminal listing shown when a Night Run starts: which Cards will run, in what order, and which were Bounced.
+The terminal listing shown when a Night Run starts: which Cards will run, in what order, and which were Bounced or Excluded.
 
 **Morning Report**:
-The markdown file written in this repo at the end of a Night Run: per Card, the outcome (done / Bounced / timed out), duration, and PR links.
+The markdown file written in this repo at the end of a Night Run: per Card, the outcome (done / Bounced / timed out / Excluded), duration, and PR links.
 
 **Run Log**:
 The timestamped file written next to the Morning Report (nights/YYYY-MM-DD.log) recording the night's events as they happen, so 03:00 can be reconstructed in the morning.
