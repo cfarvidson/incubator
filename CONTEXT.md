@@ -9,7 +9,7 @@ A Linear (work) issue assigned to me that describes one night-sized unit of work
 _Avoid_: ticket, task
 
 **Brief**:
-The fully specified body of a Card: goal, scope, verification steps, and a Repo Line. A Card without a complete Brief is Bounced, not run.
+The fully specified body of a Card: a goal section (which carries the scope), verification steps, and a Repo Line. A Card without a complete Brief is Bounced, not run.
 _Avoid_: spec, description
 
 **Repo Line**:

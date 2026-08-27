@@ -13,16 +13,16 @@ export async function planNight(deps: PlanDeps): Promise<Plan> {
   );
   const plan: Plan = { runnable: [], bounced: [] };
   for (const card of sorted) {
-    const repo = card.description.match(REPO_LINE)?.[1];
+    const repo = card.brief.match(REPO_LINE)?.[1];
     if (!repo) {
       plan.bounced.push({ card, reason: "Brief has no Repo Line (`Repo: owner/name`)" });
       continue;
     }
-    if (!GOAL_HEADING.test(card.description)) {
+    if (!GOAL_HEADING.test(card.brief)) {
       plan.bounced.push({ card, reason: "Brief has no goal section (a `What to build`, `Goal`, or `Problem` heading)" });
       continue;
     }
-    if (!VERIFICATION.test(card.description)) {
+    if (!VERIFICATION.test(card.brief)) {
       plan.bounced.push({
         card,
         reason: "Brief has no verification steps (an `Acceptance criteria`/`Verification` heading or `- [ ]` checklist)",

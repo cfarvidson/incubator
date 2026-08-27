@@ -6,7 +6,7 @@ function card(overrides: Partial<Card>): Card {
   return {
     identifier: "CFA-1",
     title: "A card",
-    description: [
+    brief: [
       "Repo: cfarvidson/example",
       "",
       "## What to build",
@@ -50,7 +50,7 @@ describe("planNight", () => {
   it("bounces a Card without a Repo Line", async () => {
     const noRepo = card({
       identifier: "CFA-11",
-      description: "## What to build\nStuff.\n\n## Acceptance criteria\n- [ ] Done",
+      brief: "## What to build\nStuff.\n\n## Acceptance criteria\n- [ ] Done",
     });
     const plan = await planNight(deps([noRepo]));
     expect(plan.runnable).toEqual([]);
@@ -73,7 +73,7 @@ describe("planNight", () => {
   it("bounces a Card whose Brief has no goal section", async () => {
     const noGoal = card({
       identifier: "CFA-13",
-      description: "Repo: cfarvidson/example\n\n## Acceptance criteria\n- [ ] Done",
+      brief: "Repo: cfarvidson/example\n\n## Acceptance criteria\n- [ ] Done",
     });
     const plan = await planNight(deps([noGoal]));
     expect(plan.bounced).toEqual([
@@ -87,7 +87,7 @@ describe("planNight", () => {
   it("bounces a Card whose Brief has no verification steps", async () => {
     const noVerify = card({
       identifier: "CFA-14",
-      description: "Repo: cfarvidson/example\n\n## What to build\nStuff.",
+      brief: "Repo: cfarvidson/example\n\n## What to build\nStuff.",
     });
     const plan = await planNight(deps([noVerify]));
     expect(plan.bounced).toEqual([
@@ -98,10 +98,10 @@ describe("planNight", () => {
     ]);
   });
 
-  it("accepts goal and verification in Swedish or alternate headings", async () => {
+  it("accepts alternate goal and verification headings", async () => {
     const alt = card({
       identifier: "CFA-15",
-      description: "Repo: cfarvidson/example\n\n## Goal\nDo it.\n\n## Verification\nRun the thing and see it work.",
+      brief: "Repo: cfarvidson/example\n\n## Goal\nDo it.\n\n## Verification\nRun the thing and see it work.",
     });
     const plan = await planNight(deps([alt]));
     expect(plan.bounced).toEqual([]);

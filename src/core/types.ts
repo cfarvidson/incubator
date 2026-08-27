@@ -2,7 +2,8 @@
 export interface Card {
   identifier: string;
   title: string;
-  description: string;
+  /** The Brief: the Card's full body (Linear calls this the description). */
+  brief: string;
   /** Linear priority: 0 = none, 1 = urgent, 2 = high, 3 = medium, 4 = low */
   priority: number;
   url: string;
