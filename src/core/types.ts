@@ -39,6 +39,10 @@ export interface RunnableCard {
 export interface BouncedCard {
   card: Card;
   reason: string;
+  /** Wall-clock session time; absent for Plan-time Bounces, which never ran. */
+  durationMs?: number;
+  /** True when the session hit the Duration Cap; the Morning Report says "timed out". */
+  timedOut?: boolean;
 }
 
 export interface Plan {
@@ -60,6 +64,8 @@ export interface CardExecutorPort {
 export interface RanCard {
   card: Card;
   prUrls: string[];
+  /** Wall-clock time of the Card Session, including any rate-limit waits. */
+  durationMs: number;
 }
 
 export interface MorningReport {
@@ -77,6 +83,8 @@ export interface ClockPort {
 
 export interface ReportPort {
   write(report: MorningReport): Promise<void>;
+  /** One run-log line; the adapter stamps it with the wall-clock time. */
+  log(message: string): void;
 }
 
 export interface RunDeps extends PlanDeps {

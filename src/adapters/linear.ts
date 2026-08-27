@@ -109,7 +109,7 @@ const COMMENT_MUTATION = `
   }
 `;
 
-export function makeLinearPort(): LinearPort {
+export function makeLinearPort(): LinearPort & { checkAuth(): Promise<void> } {
   const apiKey = process.env["LINEAR_API_KEY"];
   if (!apiKey) {
     throw new Error(
@@ -156,6 +156,22 @@ export function makeLinearPort(): LinearPort {
   }
 
   return {
+    /** Fail fast at startup on dead auth, so a broken token is found at 18:00, not at 03:00. */
+    async checkAuth(): Promise<void> {
+      try {
+        await gql<{ viewer: { id: string } }>("query { viewer { id } }", {});
+      } catch (error) {
+        if (error instanceof RateLimitError) throw error;
+        throw new Error(
+          [
+            "Linear authentication failed; nothing was run.",
+            error instanceof Error ? error.message : String(error),
+            "Create a new personal API key at linear.app > Settings > Security & access > Personal API keys and update LINEAR_API_KEY.",
+          ].join("\n"),
+        );
+      }
+    },
+
     async fetchNightQueue(): Promise<Card[]> {
       const data = await gql<{
         issues: {

@@ -39,7 +39,10 @@ Returning a Card to Todo with the `needs-info` label and an explanatory comment 
 The terminal listing shown when a Night Run starts: which Cards will run, in what order, and which were Bounced.
 
 **Morning Report**:
-The markdown file written in this repo at the end of a Night Run: per Card, the outcome and PR links.
+The markdown file written in this repo at the end of a Night Run: per Card, the outcome (done / Bounced / timed out), duration, and PR links.
+
+**Run Log**:
+The timestamped file written next to the Morning Report (nights/YYYY-MM-DD.log) recording the night's events as they happen, so 03:00 can be reconstructed in the morning.
 
 **Duration Cap**:
 The maximum wall-clock time one Card Session may run (default 2h). A Card hitting it has its session stopped and is Bounced.

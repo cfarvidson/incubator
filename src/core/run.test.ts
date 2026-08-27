@@ -14,6 +14,7 @@ interface HarnessOptions {
 function harness(cards: Card[], { sessionResult, confirm, now, fetchNightQueue }: HarnessOptions = {}) {
   const events: string[] = [];
   const reports: MorningReport[] = [];
+  const logLines: string[] = [];
   const deps: RunDeps = {
     confirm: confirm ?? (async () => true),
     clock: {
@@ -45,9 +46,12 @@ function harness(cards: Card[], { sessionResult, confirm, now, fetchNightQueue }
       write: async (report) => {
         reports.push(report);
       },
+      log: (message) => {
+        logLines.push(message);
+      },
     },
   };
-  return { deps, events, reports };
+  return { deps, events, reports, logLines };
 }
 
 describe("runNight", () => {
@@ -285,9 +289,91 @@ describe("runNight", () => {
     ]);
     expect(report?.ran).toEqual([]);
     expect(report?.bounced).toEqual([
-      { card: expect.objectContaining({ identifier: "CFA-40" }), reason: "Card Session for CFA-40 exited with status 1" },
+      {
+        card: expect.objectContaining({ identifier: "CFA-40" }),
+        reason: "Card Session for CFA-40 exited with status 1",
+        durationMs: 0,
+        timedOut: false,
+      },
     ]);
     expect(reports).toEqual([report]);
+  });
+
+  it("records each Card's wall-clock duration in the report; Plan-time Bounces have none", async () => {
+    let t = new Date("2026-01-05T22:00:00").getTime();
+    const { deps } = harness(
+      [
+        card({ identifier: "CFA-90", priority: 1 }),
+        card({ identifier: "CFA-91", priority: 2 }),
+        card({ identifier: "CFA-92", priority: 3, brief: "no repo line here" }),
+      ],
+      {
+        now: () => new Date(t),
+        sessionResult: (r) => {
+          if (r.card.identifier === "CFA-90") {
+            t += 45 * 60_000;
+            return { kind: "success", prUrls: [`https://github.com/${r.repo}/pull/1`] };
+          }
+          t += 30 * 60_000;
+          return { kind: "timeout", reason: "Card Session for CFA-91 hit the 2h Duration Cap and was stopped" };
+        },
+      },
+    );
+    const report = await runNight(deps, { stopTime: "07:00" });
+
+    expect(report?.ran).toEqual([
+      { card: expect.objectContaining({ identifier: "CFA-90" }), prUrls: [expect.any(String)], durationMs: 45 * 60_000 },
+    ]);
+    expect(report?.bounced).toEqual([
+      { card: expect.objectContaining({ identifier: "CFA-92" }), reason: expect.stringContaining("Repo Line") },
+      {
+        card: expect.objectContaining({ identifier: "CFA-91" }),
+        reason: expect.stringContaining("Duration Cap"),
+        durationMs: 30 * 60_000,
+        timedOut: true,
+      },
+    ]);
+  });
+
+  it("writes a run log detailed enough to reconstruct the night", async () => {
+    let attempts = 0;
+    const { deps, logLines } = harness(
+      [card({ identifier: "CFA-31", priority: 1 }), card({ identifier: "CFA-30", priority: 2, brief: "no repo line here" })],
+      {
+        sessionResult: (r) => {
+          attempts += 1;
+          if (attempts === 1) throw new RateLimitError("Claude CLI reported rate limiting");
+          return { kind: "success", prUrls: [`https://github.com/${r.repo}/pull/1`] };
+        },
+      },
+    );
+    await runNight(deps, { stopTime: "07:00" });
+
+    expect(logLines).toEqual([
+      "Night Run started: 1 runnable, 1 Bounced at Plan time; Stop Time 07:00",
+      "Bounced CFA-30 at Plan time: Brief has no Repo Line (`Repo: owner/name`)",
+      "Claimed CFA-31; Card Session starting",
+      "Rate limited; waiting 1m before retrying",
+      "CFA-31 done in 0m: https://github.com/cfarvidson/example/pull/1",
+      "Night Run finished: 1 done, 1 Bounced, 0 not started; Morning Report written",
+    ]);
+  });
+
+  it("logs a fatal error before rethrowing, so the run log never ends mid-mystery", async () => {
+    const { deps, logLines } = harness([card({ identifier: "CFA-95" })]);
+    deps.linear.claim = async () => {
+      throw new Error("Linear API error: issue not found");
+    };
+
+    await expect(runNight(deps, { stopTime: "07:00" })).rejects.toThrow("issue not found");
+    expect(logLines.at(-1)).toBe("Night Run crashed: Linear API error: issue not found");
+  });
+
+  it("logs nothing when the abort prompt is declined", async () => {
+    const { deps, logLines } = harness([card({ identifier: "CFA-50" })], { confirm: async () => false });
+    await runNight(deps, { stopTime: "07:00" });
+
+    expect(logLines).toEqual([]);
   });
 
   it("bounces a Card whose session hits the duration cap, with the timeout comment", async () => {
@@ -306,6 +392,8 @@ describe("runNight", () => {
       {
         card: expect.objectContaining({ identifier: "CFA-41" }),
         reason: expect.stringContaining("hit the 2h duration cap"),
+        durationMs: 0,
+        timedOut: true,
       },
     ]);
     expect(reports).toEqual([report]);

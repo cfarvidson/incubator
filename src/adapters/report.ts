@@ -1,38 +1,29 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { renderMorningReport } from "../core/report.js";
 import type { MorningReport, ReportPort } from "../core/types.js";
 
 const NIGHTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "nights");
 
-export function makeReportWriter(): ReportPort {
+/** The night's date stamp (local time): the evening the run starts, shared by report and log. */
+export function nightDateStamp(now: Date): string {
+  return now.toLocaleDateString("sv-SE");
+}
+
+/**
+ * The report/log port: the Morning Report (nights/<date>.md) and the timestamped
+ * run log (nights/<date>.log) side by side, named for the evening the run started.
+ */
+export function makeReportWriter(nightDate: string): ReportPort {
   return {
     async write(report: MorningReport): Promise<void> {
-      const date = new Date().toISOString().slice(0, 10);
-      const lines = [`# Night Run ${date}`, ""];
-      if (report.ran.length === 0) {
-        lines.push("No Cards ran.");
-      } else {
-        lines.push("## Ran", "");
-        for (const entry of report.ran) {
-          lines.push(`- ${entry.card.identifier} ${entry.card.title}`);
-          for (const url of entry.prUrls) lines.push(`  - ${url}`);
-        }
-      }
-      if (report.bounced.length > 0) {
-        lines.push("", "## Bounced", "");
-        for (const b of report.bounced) {
-          lines.push(`- ${b.card.identifier} ${b.card.title}: ${b.reason}`);
-        }
-      }
-      if (report.notStarted.length > 0) {
-        lines.push("", "## Not started (Stop Time reached)", "");
-        for (const c of report.notStarted) {
-          lines.push(`- ${c.identifier} ${c.title}`);
-        }
-      }
       mkdirSync(NIGHTS_DIR, { recursive: true });
-      writeFileSync(join(NIGHTS_DIR, `${date}.md`), lines.join("\n") + "\n");
+      writeFileSync(join(NIGHTS_DIR, `${nightDate}.md`), renderMorningReport(nightDate, report));
+    },
+    log(message: string): void {
+      mkdirSync(NIGHTS_DIR, { recursive: true });
+      appendFileSync(join(NIGHTS_DIR, `${nightDate}.log`), `[${new Date().toLocaleString("sv-SE")}] ${message}\n`);
     },
   };
 }

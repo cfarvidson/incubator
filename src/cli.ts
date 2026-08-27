@@ -1,12 +1,14 @@
+import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { makeCloneResolver } from "./adapters/clone-resolver.js";
 import { makeCardExecutor } from "./adapters/executor.js";
 import { makeLinearPort } from "./adapters/linear.js";
-import { makeReportWriter } from "./adapters/report.js";
+import { makeReportWriter, nightDateStamp } from "./adapters/report.js";
 import { loadConfig } from "./config.js";
 import { planNight } from "./core/plan.js";
+import { withRateLimitRetry } from "./core/rate-limit.js";
 import { runNight } from "./core/run.js";
-import type { Plan } from "./core/types.js";
+import type { ClockPort, Plan } from "./core/types.js";
 
 const PRIORITY_NAMES: Record<number, string> = { 0: "none", 1: "urgent", 2: "high", 3: "medium", 4: "low" };
 
@@ -34,6 +36,15 @@ function printPlan(plan: Plan) {
   }
 }
 
+/** Keeps the Mac awake exactly as long as the Runner lives: caffeinate exits with this process. */
+function preventSleep() {
+  const caffeinate = spawn("caffeinate", ["-i", "-w", String(process.pid)], { stdio: "ignore", detached: true });
+  caffeinate.on("error", () => {
+    console.error("Warning: caffeinate is not available; the Mac may sleep during the Night Run.");
+  });
+  caffeinate.unref();
+}
+
 async function askToStart(): Promise<boolean> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = await rl.question("\nStart the Night Run? [y/N] ");
@@ -44,6 +55,12 @@ async function askToStart(): Promise<boolean> {
 async function main() {
   const config = loadConfig();
   const linear = makeLinearPort();
+  const clock: ClockPort = {
+    now: () => new Date(),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  };
+  // Dead auth aborts, but a startup rate limit pauses the night like any other.
+  await withRateLimitRetry(clock, () => linear.checkAuth());
   const resolveClone = makeCloneResolver(config.cloneRoots);
 
   if (process.argv.includes("--dry-run")) {
@@ -53,6 +70,8 @@ async function main() {
     return;
   }
 
+  preventSleep();
+  const nightDate = nightDateStamp(new Date());
   const report = await runNight(
     {
       linear,
@@ -61,11 +80,8 @@ async function main() {
         durationCapMs: config.durationCapMinutes * 60_000,
         model: config.model,
       }),
-      report: makeReportWriter(),
-      clock: {
-        now: () => new Date(),
-        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-      },
+      report: makeReportWriter(nightDate),
+      clock,
       confirm: async (plan) => {
         printPlan(plan);
         return askToStart();
@@ -91,7 +107,7 @@ async function main() {
     console.log(`  not started (Stop Time reached): ${c.identifier} ${c.title}`);
   }
   if (report.ran.length === 0) console.log("  No Card ran.");
-  console.log("  Morning Report written under nights/.");
+  console.log("  Morning Report and run log written under nights/.");
 }
 
 main().catch((error) => {
