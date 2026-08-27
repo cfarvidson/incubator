@@ -4,6 +4,7 @@ import { makeCloneResolver } from "./adapters/clone-resolver.js";
 import { makeCardExecutor } from "./adapters/executor.js";
 import { makeLinearPort } from "./adapters/linear.js";
 import { makeReportWriter, nightDateStamp } from "./adapters/report.js";
+import { resolveClaudeProfile, type ClaudeProfile } from "./claude-profile.js";
 import { loadConfig } from "./config.js";
 import { planNight } from "./core/plan.js";
 import { withRateLimitRetry } from "./core/rate-limit.js";
@@ -14,8 +15,8 @@ const PRIORITY_NAMES: Record<number, string> = { 0: "none", 1: "urgent", 2: "hig
 
 const NOTHING_TOUCHED = "No Linear writes, no sessions, no worktrees.";
 
-function printPlan(plan: Plan) {
-  console.log("Tonight's Plan\n");
+function printPlan(plan: Plan, profile: ClaudeProfile | null) {
+  console.log(profile ? `Tonight's Plan - Claude Profile: ${profile.name}\n` : "Tonight's Plan\n");
 
   if (plan.runnable.length === 0) {
     console.log("  Nothing runnable in the Night Queue.");
@@ -62,6 +63,9 @@ async function askToStart(): Promise<boolean> {
 
 async function main() {
   const config = loadConfig();
+  const dryRun = process.argv.includes("--dry-run");
+  // Fail-fast before any Linear traffic: a whole night on the wrong account is expensive.
+  const profile = resolveClaudeProfile(process.argv, config.claudes, { required: !dryRun });
   const linear = makeLinearPort();
   const clock: ClockPort = {
     now: () => new Date(),
@@ -71,15 +75,16 @@ async function main() {
   await withRateLimitRetry(clock, () => linear.checkAuth());
   const resolveClone = makeCloneResolver(config.cloneRoots);
 
-  if (process.argv.includes("--dry-run")) {
+  if (dryRun) {
     const plan = await planNight({ linear, resolveClone });
-    printPlan(plan);
+    printPlan(plan, profile);
     console.log(
       `\n  ${plan.runnable.length} runnable, ${plan.bounced.length} bounced, ${plan.excluded.length} excluded. ${NOTHING_TOUCHED}`,
     );
     return;
   }
 
+  if (!profile) throw new Error("A Night Run requires a Claude Profile"); // unreachable: required above
   preventSleep();
   const nightDate = nightDateStamp(new Date());
   const report = await runNight(
@@ -89,15 +94,16 @@ async function main() {
       executor: makeCardExecutor({
         durationCapMs: config.durationCapMinutes * 60_000,
         model: config.model,
+        profile,
       }),
-      report: makeReportWriter(nightDate),
+      report: makeReportWriter(nightDate, profile.name),
       clock,
       confirm: async (plan) => {
-        printPlan(plan);
+        printPlan(plan, profile);
         return askToStart();
       },
     },
-    { stopTime: config.stopTime },
+    { stopTime: config.stopTime, claudeProfile: profile.name },
   );
 
   if (!report) {

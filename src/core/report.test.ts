@@ -18,7 +18,7 @@ describe("formatDuration", () => {
 
 describe("renderMorningReport", () => {
   it("lists every Card with outcome, PR links, and duration", () => {
-    const markdown = renderMorningReport("2026-01-06", {
+    const markdown = renderMorningReport("2026-01-06", "wclaude", {
       ran: [
         {
           card: card({ identifier: "CFA-61", title: "Ship the thing" }),
@@ -57,6 +57,8 @@ describe("renderMorningReport", () => {
       [
         "# Night Run 2026-01-06",
         "",
+        "Claude Profile: wclaude",
+        "",
         "## Ran",
         "",
         "- CFA-61 Ship the thing - done in 1h 12m",
@@ -81,7 +83,9 @@ describe("renderMorningReport", () => {
   });
 
   it("says so when no Cards ran", () => {
-    const markdown = renderMorningReport("2026-01-06", { ran: [], bounced: [], excluded: [], notStarted: [] });
-    expect(markdown).toBe(["# Night Run 2026-01-06", "", "No Cards ran.", ""].join("\n"));
+    const markdown = renderMorningReport("2026-01-06", "dclaude", { ran: [], bounced: [], excluded: [], notStarted: [] });
+    expect(markdown).toBe(
+      ["# Night Run 2026-01-06", "", "Claude Profile: dclaude", "", "No Cards ran.", ""].join("\n"),
+    );
   });
 });

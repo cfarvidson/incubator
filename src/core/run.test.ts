@@ -371,10 +371,10 @@ describe("runNight", () => {
         },
       },
     );
-    await runNight(deps, { stopTime: "07:00" });
+    await runNight(deps, { stopTime: "07:00", claudeProfile: "wclaude" });
 
     expect(logLines).toEqual([
-      "Night Run started: 1 runnable, 1 Bounced at Plan time; Stop Time 07:00",
+      "Night Run started (Claude Profile wclaude): 1 runnable, 1 Bounced at Plan time; Stop Time 07:00",
       "Bounced CFA-30 at Plan time: Brief has no Repo Line (`Repo: owner/name`)",
       "Claimed CFA-31; Card Session starting",
       "Rate limited; waiting 1m before retrying",

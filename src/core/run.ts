@@ -44,8 +44,9 @@ export async function runNight(deps: RunDeps, options: RunOptions): Promise<Morn
   // No onWait here: nothing may reach the Run Log before the Abort Prompt is answered.
   const plan = await withRateLimitRetry(deps.clock, () => planNight(deps));
   if (!(await deps.confirm(plan))) return null;
+  const profileNote = options.claudeProfile ? ` (Claude Profile ${options.claudeProfile})` : "";
   deps.report.log(
-    `Night Run started: ${plan.runnable.length} runnable, ${plan.bounced.length} Bounced at Plan time; Stop Time ${options.stopTime}`,
+    `Night Run started${profileNote}: ${plan.runnable.length} runnable, ${plan.bounced.length} Bounced at Plan time; Stop Time ${options.stopTime}`,
   );
   const report: MorningReport = { ran: [], bounced: [...plan.bounced], excluded: [...plan.excluded], notStarted: [] };
 

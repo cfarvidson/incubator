@@ -29,6 +29,10 @@ _Avoid_: orchestrator, daemon
 **Card Session**:
 The headless Claude session that executes a single Card in its own git worktree of the target repository.
 
+**Claude Profile**:
+A named way to run the Claude CLI - environment variables (e.g. `CLAUDE_CONFIG_DIR`) and optionally a command - selecting which credentials Card Sessions use. Defined in `incubator.config.json` under `claudes`; a real run picks exactly one with `--claude <name>` and refuses to start without it.
+_Avoid_: alias, account
+
 **Claim**:
 Moving a Card from Todo to In Progress when the Runner picks it up, so no other run takes it.
 

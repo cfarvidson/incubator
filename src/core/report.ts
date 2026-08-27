@@ -15,8 +15,8 @@ function bounceOutcome(b: BouncedCard): string {
 }
 
 /** Renders the Morning Report markdown: every Card of the night with outcome, PR links, and duration. */
-export function renderMorningReport(date: string, report: MorningReport): string {
-  const lines = [`# Night Run ${date}`, ""];
+export function renderMorningReport(date: string, claudeProfile: string, report: MorningReport): string {
+  const lines = [`# Night Run ${date}`, "", `Claude Profile: ${claudeProfile}`, ""];
   if (report.ran.length === 0) {
     lines.push("No Cards ran.");
   } else {

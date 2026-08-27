@@ -2,6 +2,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { ClaudeProfile } from "../claude-profile.js";
 import { RateLimitError } from "../core/rate-limit.js";
 import type { CardExecutorPort, CardSessionResult, RunnableCard } from "../core/types.js";
 
@@ -69,6 +70,8 @@ export interface ExecutorOptions {
   durationCapMs: number;
   /** Model for Card Sessions; null means the Claude CLI's own default. */
   model: string | null;
+  /** The Claude Profile every Card Session of the night runs with. */
+  profile: ClaudeProfile;
 }
 
 /**
@@ -109,9 +112,19 @@ interface SessionExit {
  * can stop the whole tree (claude plus any builds/tests it spawned), not
  * just the claude process itself.
  */
-function spawnClaudeSession(args: string[], cwd: string, durationCapMs: number): Promise<SessionExit> {
+function spawnClaudeSession(
+  profile: ClaudeProfile,
+  args: string[],
+  cwd: string,
+  durationCapMs: number,
+): Promise<SessionExit> {
   return new Promise((resolve, reject) => {
-    const child = spawn("claude", args, { cwd, stdio: ["inherit", "pipe", "pipe"], detached: true });
+    const child = spawn(profile.command, args, {
+      cwd,
+      env: { ...process.env, ...profile.env },
+      stdio: ["inherit", "pipe", "pipe"],
+      detached: true,
+    });
     let outputTail = "";
     const passThrough = (from: NodeJS.ReadableStream, to: NodeJS.WritableStream) => {
       from.on("data", (chunk: Buffer) => {
@@ -180,6 +193,7 @@ async function runSession(
   }
 
   const session = await spawnClaudeSession(
+    options.profile,
     [
       "-p",
       sessionPrompt(runnable),

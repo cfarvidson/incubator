@@ -15,11 +15,11 @@ export function nightDateStamp(now: Date): string {
  * The report/log port: the Morning Report (nights/<date>.md) and the timestamped
  * run log (nights/<date>.log) side by side, named for the evening the run started.
  */
-export function makeReportWriter(nightDate: string): ReportPort {
+export function makeReportWriter(nightDate: string, claudeProfile: string): ReportPort {
   return {
     async write(report: MorningReport): Promise<void> {
       mkdirSync(NIGHTS_DIR, { recursive: true });
-      writeFileSync(join(NIGHTS_DIR, `${nightDate}.md`), renderMorningReport(nightDate, report));
+      writeFileSync(join(NIGHTS_DIR, `${nightDate}.md`), renderMorningReport(nightDate, claudeProfile, report));
     },
     log(message: string): void {
       mkdirSync(NIGHTS_DIR, { recursive: true });
