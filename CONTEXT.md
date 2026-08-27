@@ -41,5 +41,8 @@ The terminal listing shown when a Night Run starts: which Cards will run, in wha
 **Morning Report**:
 The markdown file written in this repo at the end of a Night Run: per Card, the outcome and PR links.
 
+**Duration Cap**:
+The maximum wall-clock time one Card Session may run (default 2h). A Card hitting it has its session stopped and is Bounced.
+
 **Stop Time**:
 The clock time at which a Night Run stops starting new Cards.

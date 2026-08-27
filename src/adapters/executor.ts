@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -70,7 +70,7 @@ export function makeCardExecutor(maxCardDurationMs = DEFAULT_MAX_CARD_DURATION_M
   return {
     async execute(runnable: RunnableCard): Promise<CardSessionResult> {
       try {
-        return runSession(runnable, maxCardDurationMs);
+        return await runSession(runnable, maxCardDurationMs);
       } catch (error) {
         return { kind: "failure", reason: error instanceof Error ? error.message : String(error) };
       }
@@ -78,7 +78,41 @@ export function makeCardExecutor(maxCardDurationMs = DEFAULT_MAX_CARD_DURATION_M
   };
 }
 
-function runSession(runnable: RunnableCard, maxCardDurationMs: number): CardSessionResult {
+interface SessionExit {
+  timedOut: boolean;
+  status: number | null;
+  signal: NodeJS.Signals | null;
+}
+
+/**
+ * Spawns the session detached as its own process group so the duration cap
+ * can stop the whole tree (claude plus any builds/tests it spawned), not
+ * just the claude process itself.
+ */
+function spawnClaudeSession(args: string[], cwd: string, maxCardDurationMs: number): Promise<SessionExit> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("claude", args, { cwd, stdio: "inherit", detached: true });
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        process.kill(-child.pid!, "SIGTERM");
+      } catch {
+        child.kill("SIGTERM");
+      }
+    }, maxCardDurationMs);
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once("exit", (status, signal) => {
+      clearTimeout(timer);
+      resolve({ timedOut, status, signal });
+    });
+  });
+}
+
+async function runSession(runnable: RunnableCard, maxCardDurationMs: number): Promise<CardSessionResult> {
   const { card, clonePath } = runnable;
   const worktreePath = `${clonePath}-${card.identifier.toLowerCase()}`;
   if (existsSync(worktreePath)) {
@@ -101,8 +135,7 @@ function runSession(runnable: RunnableCard, maxCardDurationMs: number): CardSess
   git(clonePath, ["config", "extensions.worktreeConfig", "true"]);
   git(worktreePath, ["config", "--worktree", "core.hooksPath", HOOKS_DIR]);
 
-  const session = spawnSync(
-    "claude",
+  const session = await spawnClaudeSession(
     [
       "-p",
       sessionPrompt(runnable),
@@ -111,17 +144,18 @@ function runSession(runnable: RunnableCard, maxCardDurationMs: number): CardSess
       "--disallowedTools",
       DISALLOWED_TOOLS.join(","),
     ],
-    { cwd: worktreePath, stdio: "inherit", timeout: maxCardDurationMs },
+    worktreePath,
+    maxCardDurationMs,
   );
-  if ((session.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
+  if (session.timedOut) {
     return {
       kind: "timeout",
       reason: `Card Session for ${card.identifier} hit the ${maxCardDurationMs / 3_600_000}h duration cap and was stopped`,
     };
   }
-  if (session.error) throw session.error;
   if (session.status !== 0) {
-    throw new Error(`Card Session for ${card.identifier} exited with status ${session.status}`);
+    const how = session.status === null ? `was killed by ${session.signal}` : `exited with status ${session.status}`;
+    throw new Error(`Card Session for ${card.identifier} ${how}`);
   }
 
   const prListOutput = execFileSync(

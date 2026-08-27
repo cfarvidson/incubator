@@ -103,18 +103,21 @@ describe("runNight", () => {
   it("bounces a Card whose session hits the duration cap, with the timeout comment", async () => {
     const { deps, events, reports } = harness([card({ identifier: "CFA-41" })], () => ({
       kind: "timeout",
-      reason: "Card Session for CFA-41 hit the 2h cap and was stopped",
+      reason: "Card Session for CFA-41 hit the 2h duration cap and was stopped",
     }));
     const report = await runNight(deps);
 
     expect(events).toEqual([
       "claim CFA-41",
       "execute CFA-41",
-      "bounce CFA-41: Card Session for CFA-41 hit the 2h cap and was stopped",
+      "bounce CFA-41: Card Session for CFA-41 hit the 2h duration cap and was stopped",
     ]);
     expect(report.ran).toEqual([]);
     expect(report.bounced).toEqual([
-      { card: expect.objectContaining({ identifier: "CFA-41" }), reason: expect.stringContaining("hit the 2h cap") },
+      {
+        card: expect.objectContaining({ identifier: "CFA-41" }),
+        reason: expect.stringContaining("hit the 2h duration cap"),
+      },
     ]);
     expect(reports).toEqual([report]);
   });
