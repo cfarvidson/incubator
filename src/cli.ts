@@ -64,7 +64,7 @@ async function askToStart(): Promise<boolean> {
 async function main() {
   const config = loadConfig();
   const dryRun = process.argv.includes("--dry-run");
-  // Fail-fast before any Linear traffic: a whole night on the wrong account is expensive.
+  // Fail-fast before any Linear traffic: a whole night on the wrong Claude Profile is expensive.
   const profile = resolveClaudeProfile(process.argv, config.claudes, { required: !dryRun });
   const linear = makeLinearPort();
   const clock: ClockPort = {

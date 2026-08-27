@@ -44,7 +44,7 @@ export function resolveClaudeProfile(
     throw new Error(`A Night Run requires --claude <name>. ${listing}`);
   }
   const name = argv[flagIndex + 1];
-  if (!name || name.startsWith("--")) {
+  if (!name || name.startsWith("-")) {
     throw new Error(`--claude requires a profile name. ${listing}`);
   }
   const config = claudes[name];

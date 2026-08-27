@@ -60,6 +60,9 @@ describe("resolveClaudeProfile", () => {
     expect(() => resolveClaudeProfile(["--claude", "--run"], CLAUDES, { required: true })).toThrow(
       "--claude requires a profile name",
     );
+    expect(() => resolveClaudeProfile(["--claude", "-x"], CLAUDES, { required: true })).toThrow(
+      "--claude requires a profile name",
+    );
   });
 
   it("refuses a required run when no profiles are configured, pointing at the config file", () => {
