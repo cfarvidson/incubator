@@ -20,7 +20,7 @@ export function makeReportWriter(): ReportPort {
         }
       }
       if (report.bounced.length > 0) {
-        lines.push("", "## Skipped", "");
+        lines.push("", "## Bounced", "");
         for (const b of report.bounced) {
           lines.push(`- ${b.card.identifier} ${b.card.title}: ${b.reason}`);
         }

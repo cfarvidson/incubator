@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { CardExecutorPort, CardOutcome, RunnableCard } from "../core/types.js";
+import type { CardExecutorPort, CardSessionResult, RunnableCard } from "../core/types.js";
 
 /**
  * The Card Session's permissions, per CFA-168: full autonomy inside the worktree,
@@ -63,57 +63,75 @@ function sessionPrompt(runnable: RunnableCard): string {
   ].join("\n");
 }
 
-export function makeCardExecutor(): CardExecutorPort {
+/** Per-Card duration cap: a stuck session is stopped and its Card Bounced (default 2h). */
+const DEFAULT_MAX_CARD_DURATION_MS = 2 * 60 * 60 * 1000;
+
+export function makeCardExecutor(maxCardDurationMs = DEFAULT_MAX_CARD_DURATION_MS): CardExecutorPort {
   return {
-    async execute(runnable: RunnableCard): Promise<CardOutcome> {
-      const { card, clonePath } = runnable;
-      const worktreePath = `${clonePath}-${card.identifier.toLowerCase()}`;
-      if (existsSync(worktreePath)) {
-        throw new Error(`Worktree already exists at ${worktreePath}; remove it or finish that run first`);
+    async execute(runnable: RunnableCard): Promise<CardSessionResult> {
+      try {
+        return runSession(runnable, maxCardDurationMs);
+      } catch (error) {
+        return { kind: "failure", reason: error instanceof Error ? error.message : String(error) };
       }
-
-      git(clonePath, ["fetch", "origin"]);
-      const base = ["origin/main", "origin/master"].find((ref) => {
-        try {
-          git(clonePath, ["rev-parse", "--verify", ref]);
-          return true;
-        } catch {
-          return false;
-        }
-      });
-      if (!base) throw new Error(`${clonePath} has neither origin/main nor origin/master`);
-      git(clonePath, ["worktree", "add", "-b", card.branchName, worktreePath, base]);
-
-      // The pre-push guard applies only to this worktree, never the user's own checkout.
-      git(clonePath, ["config", "extensions.worktreeConfig", "true"]);
-      git(worktreePath, ["config", "--worktree", "core.hooksPath", HOOKS_DIR]);
-
-      const session = spawnSync(
-        "claude",
-        [
-          "-p",
-          sessionPrompt(runnable),
-          "--allowedTools",
-          ALLOWED_TOOLS.join(","),
-          "--disallowedTools",
-          DISALLOWED_TOOLS.join(","),
-        ],
-        { cwd: worktreePath, stdio: "inherit" },
-      );
-      if (session.status !== 0) {
-        throw new Error(`Card Session for ${card.identifier} exited with status ${session.status}`);
-      }
-
-      const prListOutput = execFileSync(
-        "gh",
-        ["pr", "list", "--head", card.branchName, "--json", "url", "--jq", ".[].url"],
-        { cwd: worktreePath, encoding: "utf8" },
-      ).trim();
-      const prUrls = prListOutput === "" ? [] : prListOutput.split("\n");
-      if (prUrls.length === 0) {
-        throw new Error(`Card Session for ${card.identifier} finished without creating a PR`);
-      }
-      return { prUrls };
     },
   };
+}
+
+function runSession(runnable: RunnableCard, maxCardDurationMs: number): CardSessionResult {
+  const { card, clonePath } = runnable;
+  const worktreePath = `${clonePath}-${card.identifier.toLowerCase()}`;
+  if (existsSync(worktreePath)) {
+    throw new Error(`Worktree already exists at ${worktreePath}; remove it or finish that run first`);
+  }
+
+  git(clonePath, ["fetch", "origin"]);
+  const base = ["origin/main", "origin/master"].find((ref) => {
+    try {
+      git(clonePath, ["rev-parse", "--verify", ref]);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  if (!base) throw new Error(`${clonePath} has neither origin/main nor origin/master`);
+  git(clonePath, ["worktree", "add", "-b", card.branchName, worktreePath, base]);
+
+  // The pre-push guard applies only to this worktree, never the user's own checkout.
+  git(clonePath, ["config", "extensions.worktreeConfig", "true"]);
+  git(worktreePath, ["config", "--worktree", "core.hooksPath", HOOKS_DIR]);
+
+  const session = spawnSync(
+    "claude",
+    [
+      "-p",
+      sessionPrompt(runnable),
+      "--allowedTools",
+      ALLOWED_TOOLS.join(","),
+      "--disallowedTools",
+      DISALLOWED_TOOLS.join(","),
+    ],
+    { cwd: worktreePath, stdio: "inherit", timeout: maxCardDurationMs },
+  );
+  if ((session.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
+    return {
+      kind: "timeout",
+      reason: `Card Session for ${card.identifier} hit the ${maxCardDurationMs / 3_600_000}h duration cap and was stopped`,
+    };
+  }
+  if (session.error) throw session.error;
+  if (session.status !== 0) {
+    throw new Error(`Card Session for ${card.identifier} exited with status ${session.status}`);
+  }
+
+  const prListOutput = execFileSync(
+    "gh",
+    ["pr", "list", "--head", card.branchName, "--json", "url", "--jq", ".[].url"],
+    { cwd: worktreePath, encoding: "utf8" },
+  ).trim();
+  const prUrls = prListOutput === "" ? [] : prListOutput.split("\n");
+  if (prUrls.length === 0) {
+    throw new Error(`Card Session for ${card.identifier} finished without creating a PR`);
+  }
+  return { kind: "success", prUrls };
 }

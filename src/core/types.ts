@@ -18,6 +18,8 @@ export interface LinearPort {
   claim(card: Card): Promise<void>;
   /** Move the Card to In Review (never Done) with a comment linking its PRs. */
   markInReview(card: Card, prUrls: string[]): Promise<void>;
+  /** Bounce: back to Todo, `ready-for-agent` swapped for `needs-info`, explanatory comment. */
+  bounce(card: Card, reason: string): Promise<void>;
 }
 
 /** Resolves an `owner/name` Repo Line to a local clone path, or null if no clone exists. */
@@ -44,13 +46,15 @@ export interface Plan {
   bounced: BouncedCard[];
 }
 
-export interface CardOutcome {
-  prUrls: string[];
-}
+/** The outcome of one Card Session: PR links, failure, or timeout (per CFA-166). */
+export type CardSessionResult =
+  | { kind: "success"; prUrls: string[] }
+  | { kind: "failure"; reason: string }
+  | { kind: "timeout"; reason: string };
 
 export interface CardExecutorPort {
   /** Runs one Card Session in its own worktree of the target repo. */
-  execute(runnable: RunnableCard): Promise<CardOutcome>;
+  execute(runnable: RunnableCard): Promise<CardSessionResult>;
 }
 
 export interface RanCard {
@@ -60,7 +64,7 @@ export interface RanCard {
 
 export interface MorningReport {
   ran: RanCard[];
-  /** Plan-time bounces; the Linear-side Bounce writes arrive with CFA-169. */
+  /** Every Bounced Card - at Plan time or after a failed/timed-out session. */
   bounced: BouncedCard[];
 }
 

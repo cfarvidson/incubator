@@ -7,6 +7,21 @@ export const NIGHT_QUEUE_FILTER = {
   labels: { name: { eq: "ready-for-agent" } },
 };
 
+interface Label {
+  id: string;
+  name: string;
+}
+
+/** The Bounce label swap: drop `ready-for-agent`, add the team's own `needs-info` (matched by name). */
+export function swapLabelsForBounce(issueLabels: Label[], teamLabels: Label[]): string[] {
+  const needsInfo = teamLabels.find((label) => label.name === "needs-info");
+  if (!needsInfo) {
+    throw new Error('The Card\'s team has no label named "needs-info"; create it so Bounces can be labeled');
+  }
+  const kept = issueLabels.filter((label) => label.name !== "ready-for-agent").map((label) => label.id);
+  return kept.includes(needsInfo.id) ? kept : [...kept, needsInfo.id];
+}
+
 const QUEUE_QUERY = `
   query NightQueue($filter: IssueFilter) {
     issues(first: 100, filter: $filter) {
@@ -44,6 +59,42 @@ const STATES_QUERY = `
 const UPDATE_STATE_MUTATION = `
   mutation UpdateIssueState($id: String!, $stateId: String!) {
     issueUpdate(id: $id, input: { stateId: $stateId }) {
+      success
+    }
+  }
+`;
+
+const BOUNCE_QUERY = `
+  query IssueForBounce($id: String!) {
+    issue(id: $id) {
+      id
+      labels {
+        nodes {
+          id
+          name
+        }
+      }
+      team {
+        states {
+          nodes {
+            id
+            name
+          }
+        }
+        labels {
+          nodes {
+            id
+            name
+          }
+        }
+      }
+    }
+  }
+`;
+
+const BOUNCE_MUTATION = `
+  mutation BounceIssue($id: String!, $stateId: String!, $labelIds: [String!]!) {
+    issueUpdate(id: $id, input: { stateId: $stateId, labelIds: $labelIds }) {
       success
     }
   }
@@ -126,6 +177,24 @@ export function makeLinearPort(): LinearPort {
       const issueId = await moveToState(card, "In Review");
       const body = ["Night Run result: done.", "", ...prUrls.map((url) => `- ${url}`)].join("\n");
       await gql(COMMENT_MUTATION, { issueId, body });
+    },
+
+    async bounce(card: Card, reason: string): Promise<void> {
+      const data = await gql<{
+        issue: {
+          id: string;
+          labels: { nodes: Label[] };
+          team: { states: { nodes: { id: string; name: string }[] }; labels: { nodes: Label[] } };
+        };
+      }>(BOUNCE_QUERY, { id: card.identifier });
+      const todo = data.issue.team.states.nodes.find((s) => s.name === "Todo");
+      if (!todo) {
+        throw new Error(`Team of ${card.identifier} has no state named "Todo"`);
+      }
+      const labelIds = swapLabelsForBounce(data.issue.labels.nodes, data.issue.team.labels.nodes);
+      await gql(BOUNCE_MUTATION, { id: data.issue.id, stateId: todo.id, labelIds });
+      const body = ["Night Run result: Bounced.", "", reason].join("\n");
+      await gql(COMMENT_MUTATION, { issueId: data.issue.id, body });
     },
   };
 }
