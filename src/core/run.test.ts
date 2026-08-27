@@ -272,7 +272,31 @@ describe("runNight", () => {
     const report = await runNight(deps, { stopTime: "07:00" });
 
     expect(events).toEqual([]);
-    expect(report).toEqual({ ran: [], bounced: [], notStarted: [] });
+    expect(report).toEqual({ ran: [], bounced: [], excluded: [], notStarted: [] });
+    expect(reports).toEqual([report]);
+  });
+
+  it("touches an excluded Card in no way: no claim, no bounce, no comment, no session", async () => {
+    const { deps, events, reports, logLines } = harness([
+      card({ identifier: "CFA-96", teamHasNeedsInfo: false, priority: 1 }),
+      card({ identifier: "CFA-97", priority: 2 }),
+    ]);
+    const report = await runNight(deps, { stopTime: "07:00" });
+
+    expect(events).toEqual([
+      "claim CFA-97",
+      "execute CFA-97",
+      "in-review CFA-97 https://github.com/cfarvidson/example/pull/1",
+    ]);
+    expect(report?.excluded).toEqual([
+      {
+        card: expect.objectContaining({ identifier: "CFA-96" }),
+        reason: "Team not onboarded: it has no `needs-info` label, so a Bounce cannot land",
+      },
+    ]);
+    expect(logLines).toContain(
+      "Excluded CFA-96 (no Linear writes): Team not onboarded: it has no `needs-info` label, so a Bounce cannot land",
+    );
     expect(reports).toEqual([report]);
   });
 

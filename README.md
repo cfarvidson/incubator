@@ -54,6 +54,15 @@ A Card needs a complete Brief or it gets Bounced at plan time:
 
 The Bounce comment on the Linear issue says exactly what was missing, so fixing the Brief and re-labeling it queues it for the next night.
 
+## Onboarding a team
+
+The Night Queue spans every team in the Linear workspace, but the Runner only serves teams that have what it writes to:
+
+- The team labels `ready-for-agent` (queues a Card) and `needs-info` (where a Bounce lands)
+- The states `Todo`, `In Progress`, and `In Review`
+
+A Card from a team without a `needs-info` label is excluded at Plan time with no Linear writes at all, since not even a Bounce could land there. It shows up in the Plan and the Morning Report with the reason.
+
 ## Layout
 
 ```

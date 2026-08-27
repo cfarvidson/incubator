@@ -44,6 +44,12 @@ describe("renderMorningReport", () => {
           timedOut: true,
         },
       ],
+      excluded: [
+        {
+          card: card({ identifier: "CFA-96", title: "From an IRIS-like team" }),
+          reason: "Team not onboarded: it has no `needs-info` label, so a Bounce cannot land",
+        },
+      ],
       notStarted: [card({ identifier: "CFA-71", title: "Left for tomorrow" })],
     });
 
@@ -62,6 +68,10 @@ describe("renderMorningReport", () => {
         "- CFA-40 Broke midway - Bounced after 12m: Card Session for CFA-40 exited with status 1",
         "- CFA-41 Got stuck - timed out after 2h 00m: Card Session for CFA-41 hit the 2h Duration Cap and was stopped",
         "",
+        "## Excluded (team not onboarded)",
+        "",
+        "- CFA-96 From an IRIS-like team - Team not onboarded: it has no `needs-info` label, so a Bounce cannot land",
+        "",
         "## Not started (Stop Time reached)",
         "",
         "- CFA-71 Left for tomorrow",
@@ -71,7 +81,7 @@ describe("renderMorningReport", () => {
   });
 
   it("says so when no Cards ran", () => {
-    const markdown = renderMorningReport("2026-01-06", { ran: [], bounced: [], notStarted: [] });
+    const markdown = renderMorningReport("2026-01-06", { ran: [], bounced: [], excluded: [], notStarted: [] });
     expect(markdown).toBe(["# Night Run 2026-01-06", "", "No Cards ran.", ""].join("\n"));
   });
 });

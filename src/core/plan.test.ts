@@ -14,7 +14,27 @@ function deps(cards: Card[], overrides: Partial<PlanDeps> = {}): PlanDeps {
 describe("planNight", () => {
   it("produces an empty Plan for an empty Night Queue", async () => {
     const plan = await planNight(deps([]));
-    expect(plan).toEqual({ runnable: [], bounced: [] });
+    expect(plan).toEqual({ runnable: [], bounced: [], excluded: [] });
+  });
+
+  it("excludes a Card whose team has no needs-info label, since a Bounce could not land", async () => {
+    const notOnboarded = card({ identifier: "CFA-16", teamHasNeedsInfo: false });
+    const plan = await planNight(deps([notOnboarded]));
+    expect(plan.runnable).toEqual([]);
+    expect(plan.bounced).toEqual([]);
+    expect(plan.excluded).toEqual([
+      {
+        card: expect.objectContaining({ identifier: "CFA-16" }),
+        reason: "Team not onboarded: it has no `needs-info` label, so a Bounce cannot land",
+      },
+    ]);
+  });
+
+  it("excludes rather than bounces when the team lacks needs-info, even if the Brief is also invalid", async () => {
+    const notOnboarded = card({ identifier: "CFA-17", teamHasNeedsInfo: false, brief: "no repo line here" });
+    const plan = await planNight(deps([notOnboarded]));
+    expect(plan.bounced).toEqual([]);
+    expect(plan.excluded.map((e) => e.card.identifier)).toEqual(["CFA-17"]);
   });
 
   it("plans a Card with a complete Brief as runnable, with its clone path", async () => {

@@ -36,6 +36,13 @@ const QUEUE_QUERY = `
         priority
         url
         branchName
+        team {
+          labels(filter: { name: { eq: "needs-info" } }) {
+            nodes {
+              id
+            }
+          }
+        }
       }
     }
   }
@@ -183,15 +190,17 @@ export function makeLinearPort(): LinearPort & { checkAuth(): Promise<void> } {
             priority: number;
             url: string;
             branchName: string;
+            team: { labels: { nodes: { id: string }[] } };
           }[];
         };
       }>(QUEUE_QUERY, { filter: NIGHT_QUEUE_FILTER });
       if (data.issues.pageInfo.hasNextPage) {
         console.error("Warning: the Night Queue has more than 100 Cards; the Plan only covers the first 100.");
       }
-      return data.issues.nodes.map(({ description, ...node }) => ({
+      return data.issues.nodes.map(({ description, team, ...node }) => ({
         ...node,
         brief: description ?? "",
+        teamHasNeedsInfo: team.labels.nodes.length > 0,
       }));
     },
 

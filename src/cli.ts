@@ -34,6 +34,14 @@ function printPlan(plan: Plan) {
       console.log(`    ${b.reason}`);
     }
   }
+
+  if (plan.excluded.length > 0) {
+    console.log(`\n  Would exclude (no Linear writes):`);
+    for (const e of plan.excluded) {
+      console.log(`  - ${e.card.identifier} ${e.card.title}`);
+      console.log(`    ${e.reason}`);
+    }
+  }
 }
 
 /** Keeps the Mac awake exactly as long as the Runner lives: caffeinate exits with this process. */
@@ -66,7 +74,9 @@ async function main() {
   if (process.argv.includes("--dry-run")) {
     const plan = await planNight({ linear, resolveClone });
     printPlan(plan);
-    console.log(`\n  ${plan.runnable.length} runnable, ${plan.bounced.length} bounced. ${NOTHING_TOUCHED}`);
+    console.log(
+      `\n  ${plan.runnable.length} runnable, ${plan.bounced.length} bounced, ${plan.excluded.length} excluded. ${NOTHING_TOUCHED}`,
+    );
     return;
   }
 
@@ -102,6 +112,9 @@ async function main() {
   }
   for (const b of report.bounced) {
     console.log(`  bounced ${b.card.identifier}: ${b.reason}`);
+  }
+  for (const e of report.excluded) {
+    console.log(`  excluded ${e.card.identifier}: ${e.reason}`);
   }
   for (const c of report.notStarted) {
     console.log(`  not started (Stop Time reached): ${c.identifier} ${c.title}`);

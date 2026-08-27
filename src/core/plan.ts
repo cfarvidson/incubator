@@ -11,8 +11,13 @@ export async function planNight(deps: PlanDeps): Promise<Plan> {
   const sorted = [...queue].sort(
     (a, b) => (a.priority === 0 ? 5 : a.priority) - (b.priority === 0 ? 5 : b.priority),
   );
-  const plan: Plan = { runnable: [], bounced: [] };
+  const plan: Plan = { runnable: [], bounced: [], excluded: [] };
   for (const card of sorted) {
+    // Checked before the Brief: a Card in a team without `needs-info` cannot even be Bounced.
+    if (!card.teamHasNeedsInfo) {
+      plan.excluded.push({ card, reason: "Team not onboarded: it has no `needs-info` label, so a Bounce cannot land" });
+      continue;
+    }
     const repo = card.brief.match(REPO_LINE)?.[1];
     if (!repo) {
       plan.bounced.push({ card, reason: "Brief has no Repo Line (`Repo: owner/name`)" });

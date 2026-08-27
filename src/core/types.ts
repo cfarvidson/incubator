@@ -9,6 +9,8 @@ export interface Card {
   url: string;
   /** Linear's suggested git branch name for the issue. */
   branchName: string;
+  /** Whether the Card's team has a `needs-info` label; without one a Bounce cannot land. */
+  teamHasNeedsInfo: boolean;
 }
 
 export interface LinearPort {
@@ -45,9 +47,16 @@ export interface BouncedCard {
   timedOut?: boolean;
 }
 
+/** A Card excluded at Plan time because its team is not onboarded; it gets no Linear writes at all. */
+export interface ExcludedCard {
+  card: Card;
+  reason: string;
+}
+
 export interface Plan {
   runnable: RunnableCard[];
   bounced: BouncedCard[];
+  excluded: ExcludedCard[];
 }
 
 /** The outcome of one Card Session: PR links, failure, or timeout (per CFA-166). */
@@ -72,6 +81,8 @@ export interface MorningReport {
   ran: RanCard[];
   /** Every Bounced Card - at Plan time or after a failed/timed-out session. */
   bounced: BouncedCard[];
+  /** Cards from teams that are not onboarded; untouched in Linear. */
+  excluded: ExcludedCard[];
   /** Runnable Cards never started because the Stop Time was reached; they stay in the Night Queue. */
   notStarted: Card[];
 }

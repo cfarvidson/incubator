@@ -32,6 +32,12 @@ export function renderMorningReport(date: string, report: MorningReport): string
       lines.push(`- ${b.card.identifier} ${b.card.title} - ${bounceOutcome(b)}: ${b.reason}`);
     }
   }
+  if (report.excluded.length > 0) {
+    lines.push("", "## Excluded (team not onboarded)", "");
+    for (const e of report.excluded) {
+      lines.push(`- ${e.card.identifier} ${e.card.title} - ${e.reason}`);
+    }
+  }
   if (report.notStarted.length > 0) {
     lines.push("", "## Not started (Stop Time reached)", "");
     for (const c of report.notStarted) {

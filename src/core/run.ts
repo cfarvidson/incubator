@@ -47,7 +47,7 @@ export async function runNight(deps: RunDeps, options: RunOptions): Promise<Morn
   deps.report.log(
     `Night Run started: ${plan.runnable.length} runnable, ${plan.bounced.length} Bounced at Plan time; Stop Time ${options.stopTime}`,
   );
-  const report: MorningReport = { ran: [], bounced: [...plan.bounced], notStarted: [] };
+  const report: MorningReport = { ran: [], bounced: [...plan.bounced], excluded: [...plan.excluded], notStarted: [] };
 
   try {
     await workTheQueue(deps, options, plan, report, onWait);
@@ -67,6 +67,10 @@ async function workTheQueue(
   onWait: (waitMs: number) => void,
 ): Promise<void> {
   const retry = <T>(fn: () => Promise<T>) => withRateLimitRetry(deps.clock, fn, { onWait });
+
+  for (const excluded of plan.excluded) {
+    deps.report.log(`Excluded ${excluded.card.identifier} (no Linear writes): ${excluded.reason}`);
+  }
 
   for (const bounced of plan.bounced) {
     await retry(() => deps.linear.bounce(bounced.card, bounced.reason));
