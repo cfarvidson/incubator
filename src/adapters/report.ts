@@ -1,13 +1,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { NightReport, ReportPort } from "../core/types.js";
+import type { MorningReport, ReportPort } from "../core/types.js";
 
 const NIGHTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "nights");
 
 export function makeReportWriter(): ReportPort {
   return {
-    async write(report: NightReport): Promise<void> {
+    async write(report: MorningReport): Promise<void> {
       const date = new Date().toISOString().slice(0, 10);
       const lines = [`# Night Run ${date}`, ""];
       if (report.ran.length === 0) {
@@ -20,7 +20,7 @@ export function makeReportWriter(): ReportPort {
         }
       }
       if (report.bounced.length > 0) {
-        lines.push("", "## Bounced", "");
+        lines.push("", "## Skipped", "");
         for (const b of report.bounced) {
           lines.push(`- ${b.card.identifier} ${b.card.title}: ${b.reason}`);
         }

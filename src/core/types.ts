@@ -53,14 +53,19 @@ export interface CardExecutorPort {
   execute(runnable: RunnableCard): Promise<CardOutcome>;
 }
 
-export interface NightReport {
-  ran: { card: Card; prUrls: string[] }[];
+export interface RanCard {
+  card: Card;
+  prUrls: string[];
+}
+
+export interface MorningReport {
+  ran: RanCard[];
+  /** Plan-time bounces; the Linear-side Bounce writes arrive with CFA-169. */
   bounced: BouncedCard[];
 }
 
 export interface ReportPort {
-  /** Writes the Morning Report. */
-  write(report: NightReport): Promise<void>;
+  write(report: MorningReport): Promise<void>;
 }
 
 export interface RunDeps extends PlanDeps {

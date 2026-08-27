@@ -1,0 +1,17 @@
+#!/bin/sh
+# Installed as the per-worktree hooks path for night Card Sessions.
+# Blocks pushes to main/master and remote branch deletion at the git level,
+# regardless of how the push command was phrased or wrapped.
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main | refs/heads/master)
+      echo "pre-push: refusing to push to $remote_ref from a Card Session" >&2
+      exit 1
+      ;;
+  esac
+  if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    echo "pre-push: refusing to delete remote ref $remote_ref" >&2
+    exit 1
+  fi
+done
+exit 0

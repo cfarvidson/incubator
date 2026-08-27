@@ -26,7 +26,7 @@ async function main() {
       for (const url of entry.prUrls) console.log(`    ${url}`);
     }
     for (const b of report.bounced) {
-      console.log(`  would bounce ${b.card.identifier}: ${b.reason}`);
+      console.log(`  skipped ${b.card.identifier}: ${b.reason}`);
     }
     if (report.ran.length === 0) console.log("  No Card ran.");
     console.log("  Morning Report written under nights/.");

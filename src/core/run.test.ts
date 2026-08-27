@@ -1,30 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { card } from "./test-fixtures.js";
 import { runNight } from "./run.js";
-import type { Card, NightReport, RunDeps } from "./types.js";
-
-function card(overrides: Partial<Card>): Card {
-  return {
-    identifier: "CFA-1",
-    title: "A card",
-    brief: [
-      "Repo: cfarvidson/example",
-      "",
-      "## What to build",
-      "Something end-to-end.",
-      "",
-      "## Acceptance criteria",
-      "- [ ] It works",
-    ].join("\n"),
-    priority: 0,
-    url: "https://linear.app/tv4/issue/CFA-1",
-    branchName: "cfa-1-a-card",
-    ...overrides,
-  };
-}
+import type { Card, MorningReport, RunDeps } from "./types.js";
 
 function harness(cards: Card[]) {
   const events: string[] = [];
-  const reports: NightReport[] = [];
+  const reports: MorningReport[] = [];
   const deps: RunDeps = {
     linear: {
       fetchNightQueue: async () => cards,

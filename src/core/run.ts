@@ -1,10 +1,10 @@
 import { planNight } from "./plan.js";
-import type { NightReport, RunDeps } from "./types.js";
+import type { MorningReport, RunDeps } from "./types.js";
 
 /** Executes a single-Card Night Run: top runnable Card only (CFA-168). */
-export async function runNight(deps: RunDeps): Promise<NightReport> {
+export async function runNight(deps: RunDeps): Promise<MorningReport> {
   const plan = await planNight(deps);
-  const report: NightReport = { ran: [], bounced: plan.bounced };
+  const report: MorningReport = { ran: [], bounced: plan.bounced };
 
   const top = plan.runnable[0];
   if (top) {
