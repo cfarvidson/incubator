@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 
 export interface Config {
   cloneRoots: string[];
-  maxCardDurationMinutes: number;
+  /** The Duration Cap per Card Session. */
+  durationCapMinutes: number;
   /** Stop Time as HH:MM. */
   stopTime: string;
   /** Model for Card Sessions; null means the Claude CLI's own default. */
@@ -16,10 +17,18 @@ const CONFIG_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "incubat
 
 export function loadConfig(): Config {
   const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as Partial<Config>;
+  const stopTime = raw.stopTime ?? "07:00";
+  // A malformed Stop Time would otherwise silently never fire (Invalid Date compares false).
+  if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(stopTime)) {
+    throw new Error(`stopTime in incubator.config.json must be HH:MM (24h), got "${stopTime}"`);
+  }
+  if (!raw.cloneRoots?.length) {
+    throw new Error("cloneRoots in incubator.config.json is required");
+  }
   return {
-    cloneRoots: (raw.cloneRoots ?? ["~/code"]).map(expandHome),
-    maxCardDurationMinutes: raw.maxCardDurationMinutes ?? 120,
-    stopTime: raw.stopTime ?? "07:00",
+    cloneRoots: raw.cloneRoots.map(expandHome),
+    durationCapMinutes: raw.durationCapMinutes ?? 120,
+    stopTime,
     model: raw.model ?? null,
   };
 }

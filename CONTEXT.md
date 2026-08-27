@@ -46,3 +46,9 @@ The maximum wall-clock time one Card Session may run (default 2h). A Card hittin
 
 **Stop Time**:
 The clock time at which a Night Run stops starting new Cards.
+
+**Abort Prompt**:
+The single yes/no gate shown after the Plan; declining runs nothing - no Linear writes, no sessions, no worktrees.
+
+**Backoff**:
+The wait-and-retry response to rate limiting or exhausted quota (1 to 15 minutes, doubling). Rate limits pause the night, they never abort it; once the Stop Time passes, a rate-limited Card is Bounced instead of retried.

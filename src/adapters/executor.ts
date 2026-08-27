@@ -66,17 +66,19 @@ function sessionPrompt(runnable: RunnableCard): string {
 
 export interface ExecutorOptions {
   /** The Duration Cap: a stuck session is stopped and its Card Bounced. */
-  maxCardDurationMs: number;
+  durationCapMs: number;
   /** Model for Card Sessions; null means the Claude CLI's own default. */
   model: string | null;
 }
 
 /**
- * When the CLI reports rate limiting or exhausted quota, the whole session is
- * retried after the core's backoff; only phrases the CLI itself emits are
- * matched, on a failed exit, to avoid mistaking session chatter for a limit.
+ * Heuristic rate-limit detection: matched against the tail of a *failed*
+ * session's output, which includes session chatter, so only phrasings the
+ * CLI/API emit for limits are listed - never a bare "rate limit", which a
+ * session working on rate-limiting code would print. A false positive cannot
+ * wedge the night: the core stops retrying at the Stop Time and Bounces.
  */
-const RATE_LIMIT_OUTPUT = /usage limit reached|rate limit/i;
+const RATE_LIMIT_OUTPUT = /usage limit reached|rate[ _-]?limit(ed|_error)|too many requests|quota exceeded/i;
 
 export function makeCardExecutor(options: ExecutorOptions): CardExecutorPort {
   // Worktrees this run created: a rate-limited session may resume in its own
@@ -107,7 +109,7 @@ interface SessionExit {
  * can stop the whole tree (claude plus any builds/tests it spawned), not
  * just the claude process itself.
  */
-function spawnClaudeSession(args: string[], cwd: string, maxCardDurationMs: number): Promise<SessionExit> {
+function spawnClaudeSession(args: string[], cwd: string, durationCapMs: number): Promise<SessionExit> {
   return new Promise((resolve, reject) => {
     const child = spawn("claude", args, { cwd, stdio: ["inherit", "pipe", "pipe"], detached: true });
     let outputTail = "";
@@ -120,20 +122,28 @@ function spawnClaudeSession(args: string[], cwd: string, maxCardDurationMs: numb
     passThrough(child.stdout!, process.stdout);
     passThrough(child.stderr!, process.stderr);
     let timedOut = false;
+    let killTimer: NodeJS.Timeout | undefined;
+    const killGroup = (signal: NodeJS.Signals) => {
+      try {
+        process.kill(-child.pid!, signal);
+      } catch {
+        child.kill(signal);
+      }
+    };
     const timer = setTimeout(() => {
       timedOut = true;
-      try {
-        process.kill(-child.pid!, "SIGTERM");
-      } catch {
-        child.kill("SIGTERM");
-      }
-    }, maxCardDurationMs);
+      killGroup("SIGTERM");
+      // A session ignoring SIGTERM must not hang the whole Night Run.
+      killTimer = setTimeout(() => killGroup("SIGKILL"), 10_000);
+    }, durationCapMs);
     child.once("error", (error) => {
       clearTimeout(timer);
+      clearTimeout(killTimer);
       reject(error);
     });
     child.once("exit", (status, signal) => {
       clearTimeout(timer);
+      clearTimeout(killTimer);
       resolve({ timedOut, status, signal, outputTail });
     });
   });
@@ -180,12 +190,12 @@ async function runSession(
       ...(options.model ? ["--model", options.model] : []),
     ],
     worktreePath,
-    options.maxCardDurationMs,
+    options.durationCapMs,
   );
   if (session.timedOut) {
     return {
       kind: "timeout",
-      reason: `Card Session for ${card.identifier} hit the ${options.maxCardDurationMs / 3_600_000}h duration cap and was stopped`,
+      reason: `Card Session for ${card.identifier} hit the ${options.durationCapMs / 3_600_000}h Duration Cap and was stopped`,
     };
   }
   if (session.status !== 0) {

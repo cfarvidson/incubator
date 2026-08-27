@@ -10,6 +10,8 @@ import type { Plan } from "./core/types.js";
 
 const PRIORITY_NAMES: Record<number, string> = { 0: "none", 1: "urgent", 2: "high", 3: "medium", 4: "low" };
 
+const NOTHING_TOUCHED = "No Linear writes, no sessions, no worktrees.";
+
 function printPlan(plan: Plan) {
   console.log("Tonight's Plan\n");
 
@@ -47,9 +49,7 @@ async function main() {
   if (process.argv.includes("--dry-run")) {
     const plan = await planNight({ linear, resolveClone });
     printPlan(plan);
-    console.log(
-      `\n  ${plan.runnable.length} runnable, ${plan.bounced.length} bounced. No Linear writes, no sessions, no worktrees.`,
-    );
+    console.log(`\n  ${plan.runnable.length} runnable, ${plan.bounced.length} bounced. ${NOTHING_TOUCHED}`);
     return;
   }
 
@@ -58,7 +58,7 @@ async function main() {
       linear,
       resolveClone,
       executor: makeCardExecutor({
-        maxCardDurationMs: config.maxCardDurationMinutes * 60_000,
+        durationCapMs: config.durationCapMinutes * 60_000,
         model: config.model,
       }),
       report: makeReportWriter(),
@@ -75,7 +75,7 @@ async function main() {
   );
 
   if (!report) {
-    console.log("\nAborted. No Linear writes, no sessions, no worktrees.");
+    console.log(`\nAborted. ${NOTHING_TOUCHED}`);
     return;
   }
 

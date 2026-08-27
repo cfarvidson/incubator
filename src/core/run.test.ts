@@ -236,6 +236,33 @@ describe("runNight", () => {
     expect(report?.ran.map((r) => r.card.identifier)).toEqual(["CFA-81"]);
   });
 
+  it("stops retrying a rate-limited Card once the Stop Time passes, and Bounces it", async () => {
+    let now = new Date("2026-01-06T06:50:00");
+    const { deps, events, reports } = harness(
+      [card({ identifier: "CFA-82", priority: 1 }), card({ identifier: "CFA-83", priority: 2 })],
+      {
+        now: () => now,
+        sessionResult: (r) => {
+          if (r.card.identifier === "CFA-82") {
+            now = new Date("2026-01-06T07:10:00");
+            throw new RateLimitError("Claude CLI reported rate limiting");
+          }
+          return { kind: "success", prUrls: [`https://github.com/${r.repo}/pull/1`] };
+        },
+      },
+    );
+    const report = await runNight(deps, { stopTime: "07:00" });
+
+    expect(events).toEqual([
+      "claim CFA-82",
+      "execute CFA-82",
+      "bounce CFA-82: Card Session for CFA-82 was rate limited and the Stop Time passed before it could be retried",
+    ]);
+    expect(report?.bounced.map((b) => b.card.identifier)).toEqual(["CFA-82"]);
+    expect(report?.notStarted.map((c) => c.identifier)).toEqual(["CFA-83"]);
+    expect(reports).toEqual([report]);
+  });
+
   it("handles an empty Night Queue: no Linear writes, no sessions, the report still lands", async () => {
     const { deps, events, reports } = harness([]);
     const report = await runNight(deps, { stopTime: "07:00" });
