@@ -87,6 +87,7 @@ async function main() {
   if (!profile) throw new Error("A Night Run requires a Claude Profile"); // unreachable: required above
   preventSleep();
   const nightDate = nightDateStamp(new Date());
+  const reportWriter = makeReportWriter(nightDate, profile.name);
   const report = await runNight(
     {
       linear,
@@ -95,8 +96,9 @@ async function main() {
         durationCapMs: config.durationCapMinutes * 60_000,
         model: config.model,
         profile,
+        log: (message) => reportWriter.log(message),
       }),
-      report: makeReportWriter(nightDate, profile.name),
+      report: reportWriter,
       clock,
       confirm: async (plan) => {
         printPlan(plan, profile);
