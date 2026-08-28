@@ -21,7 +21,7 @@ A Card Session that exceeds the Duration Cap (default 2h) gets its whole process
 - `LINEAR_API_KEY` set (personal API key from linear.app > Settings > Security & access > Personal API keys; this repo loads it via `.envrc`)
 - Local clones of the target repos under one of the configured clone roots
 
-## Usage
+## Commands
 
 ```bash
 pnpm install
@@ -29,9 +29,16 @@ pnpm install
 # Preview tonight's Plan. Read-only, writes nothing anywhere.
 pnpm night --dry-run
 
-# Start a Night Run.
-pnpm night
+# Start a Night Run. --claude picks the Claude Profile (required for a real run).
+pnpm night --claude <name>
+
+pnpm test        # vitest
+pnpm typecheck   # tsc --noEmit
 ```
+
+In a Claude Code session in this repo there is also:
+
+- `/groom` - the daytime counterpart of a Night Run: goes through the Cards that cannot run tonight (Bounced, `needs-info`, Excluded) and repairs their Briefs interactively until the queue is clean. See `.claude/skills/groom/SKILL.md`.
 
 ## Configuration
 
@@ -43,6 +50,7 @@ pnpm night
 | `durationCapMinutes` | `120` | Duration Cap per Card Session. |
 | `stopTime` | `"07:00"` | Stop Time (HH:MM, 24h). No new Cards start after this. |
 | `model` | `null` | Model for Card Sessions. `null` uses the Claude CLI's default. |
+| `claudes` | required for a real run | Named Claude Profiles: per name, env vars (e.g. `CLAUDE_CONFIG_DIR`, `~` expands) and optionally a command. `pnpm night --claude <name>` picks one. |
 
 ## Writing a runnable Card
 
@@ -52,7 +60,7 @@ A Card needs a complete Brief or it gets Bounced at plan time:
 - A goal section carrying the scope
 - Verification steps
 
-The Bounce comment on the Linear issue says exactly what was missing, so fixing the Brief and re-labeling it queues it for the next night.
+The Bounce comment on the Linear issue says exactly what was missing, so fixing the Brief and re-labeling it queues it for the next night. `/groom` does this systematically for every blocked Card.
 
 ## Onboarding a team
 
@@ -70,13 +78,7 @@ src/core/       Pure logic: planning, the run loop, rate-limit backoff, report r
 src/adapters/   The messy edges: Linear API, clone resolution, Claude sessions, file writing
 src/cli.ts      Entry point wiring the two together
 nights/         Morning Reports and Run Logs, one pair per night
+.claude/skills/ Repo skills for Claude Code sessions (/groom)
 ```
 
 Core code talks to the world only through ports (`LinearPort`, `CardExecutorPort`, `ClockPort`, ...), which is what makes the run loop testable without a real Linear workspace or a real Claude session.
-
-## Development
-
-```bash
-pnpm test        # vitest
-pnpm typecheck   # tsc --noEmit
-```

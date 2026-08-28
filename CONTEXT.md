@@ -33,6 +33,13 @@ The headless Claude session that executes a single Card in its own git worktree 
 A named way to run the Claude CLI - environment variables (e.g. `CLAUDE_CONFIG_DIR`) and optionally a command - selecting which credentials Card Sessions use. Defined in `incubator.config.json` under `claudes`; a real run picks exactly one with `--claude <name>` and refuses to start without it.
 _Avoid_: alias, account
 
+**Groom**:
+The daytime pass over Cards that cannot run tonight - Bounced, `needs-info`, or Excluded - repairing their Briefs so they enter the Night Queue. Done interactively via the `/groom` skill; the Runner never grooms.
+_Avoid_: triage, refine
+
+**Parked**:
+A Card deliberately left out of grooming: not runnable tonight by the user's choice, untouched, with a noted reason.
+
 **Claim**:
 Moving a Card from Todo to In Progress when the Runner picks it up, so no other run takes it.
 

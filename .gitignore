@@ -1,2 +1,4 @@
 node_modules/
 nights/
+# The global ~/.gitignore excludes **/.claude; this repo's skills are versioned.
+!.claude/
