@@ -44,10 +44,8 @@ export function makeCardExecutor(options: ExecutorOptions): CardExecutorPort {
         capMs: options.durationCap.ms,
         onStdout: (chunk) => renderer.feed(chunk),
         onStderr: (chunk) => process.stderr.write(chunk),
-        onInterrupt: () => {
-          console.error("\nCtrl+C: stopping the Card Session, then exiting.");
-          options.log(`Interrupted (Ctrl+C); Card Session for ${card.identifier} stopped`);
-        },
+        // cli.ts already tells the user Ctrl+C is winding the night down; this records it for the morning.
+        onInterrupt: () => options.log(`Interrupted (Ctrl+C); Card Session for ${card.identifier} stopped`),
       });
       renderer.end();
 

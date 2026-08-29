@@ -102,6 +102,18 @@ export interface ClockPort {
   sleep(ms: number): Promise<void>;
 }
 
+/**
+ * Ctrl+C as a value for the windows outside a Card Session (planning, Linear
+ * writes, Backoff sleeps); the supervisor covers Ctrl+C mid-session. The run
+ * winds down at the next safe point instead of dying report-less.
+ */
+export interface InterruptionPort {
+  /** True once the user pressed Ctrl+C. */
+  interrupted(): boolean;
+  /** Resolves on the first Ctrl+C; raced against a Backoff sleep so the wind-down never sits out the timer. */
+  whenInterrupted(): Promise<void>;
+}
+
 export interface RunLogPort {
   /** One run-log line; the adapter stamps it with the wall-clock time. */
   log(message: string): void;
@@ -118,6 +130,7 @@ export interface RunDeps extends PlanDeps {
   runLog: RunLogPort;
   morningReport: MorningReportPort;
   clock: ClockPort;
+  interruption: InterruptionPort;
   /** The one chance to abort after seeing the Plan: false runs nothing (CFA-170). */
   confirm(plan: Plan): Promise<boolean>;
 }

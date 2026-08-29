@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { makeCloneResolver } from "./adapters/clone-resolver.js";
 import { makeCardExecutor } from "./adapters/executor.js";
+import { makeInterruptionWatcher } from "./adapters/interruption.js";
 import { makeLinearPort } from "./adapters/linear.js";
 import { makeMorningReportWriter, makeRunLog, nightDateStamp } from "./adapters/report.js";
 import { resolveClaudeProfile } from "./claude-profile.js";
@@ -52,6 +53,18 @@ async function main() {
 
   if (!profile) throw new Error("A Night Run requires a Claude Profile"); // unreachable: required above
   preventSleep();
+  // First Ctrl+C winds the night down at the next safe point; a second is the
+  // user insisting, and exits without the Bounce and Morning Report guarantees.
+  let sigints = 0;
+  process.on("SIGINT", () => {
+    sigints += 1;
+    if (sigints === 1) {
+      console.error("\nCtrl+C: winding down the Night Run; press Ctrl+C again to exit immediately.");
+    } else {
+      process.exit(130);
+    }
+  });
+  const interruption = makeInterruptionWatcher();
   const nightDate = nightDateStamp(new Date());
   const runLog = makeRunLog(nightDate);
   const report = await runNight(
@@ -67,6 +80,7 @@ async function main() {
       runLog,
       morningReport: makeMorningReportWriter(nightDate, profile.name),
       clock,
+      interruption,
       confirm: async (plan) => {
         console.log(renderPlan(plan, profile.name).join("\n"));
         return askToStart();
@@ -77,6 +91,7 @@ async function main() {
 
   if (!report) {
     console.log(renderAborted().join("\n"));
+    if (interruption.interrupted()) process.exit(130);
     return;
   }
 

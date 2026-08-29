@@ -11,9 +11,26 @@ interface HarnessOptions {
   now?: () => Date;
   fetchNightQueue?: () => Promise<Card[]>;
   stranded?: Card[];
+  interruption?: RunDeps["interruption"];
 }
 
-function harness(cards: Card[], { sessionResult, confirm, now, fetchNightQueue, stranded }: HarnessOptions = {}) {
+/** A hand-fired InterruptionPort: `interrupt()` is the test's Ctrl+C. */
+function manualInterruption() {
+  let flag = false;
+  let fire!: () => void;
+  const when = new Promise<void>((resolve) => {
+    fire = resolve;
+  });
+  return {
+    port: { interrupted: () => flag, whenInterrupted: () => when },
+    interrupt: () => {
+      flag = true;
+      fire();
+    },
+  };
+}
+
+function harness(cards: Card[], { sessionResult, confirm, now, fetchNightQueue, stranded, interruption }: HarnessOptions = {}) {
   const events: string[] = [];
   const reports: MorningReport[] = [];
   const logLines: string[] = [];
@@ -39,6 +56,7 @@ function harness(cards: Card[], { sessionResult, confirm, now, fetchNightQueue, 
       },
     },
     resolveClone: (repo) => `/clones/${repo.split("/")[1]}`,
+    interruption: interruption ?? { interrupted: () => false, whenInterrupted: () => new Promise(() => {}) },
     executor: {
       execute: async (r) => {
         events.push(`execute ${r.card.identifier}`);
@@ -462,7 +480,7 @@ describe("runNight", () => {
     expect(reports.at(-1)).toEqual(report);
   });
 
-  it("bounces the in-flight Card on interruption, lands the report, and starts no further Card", async () => {
+  it("bounces the in-flight Card on interruption, lands the report, and reports the rest as not started", async () => {
     const { deps, events, reports, logLines } = harness(
       [card({ identifier: "CFA-110", priority: 1 }), card({ identifier: "CFA-111", priority: 2 })],
       { sessionResult: () => ({ kind: "interrupted" }) },
@@ -483,11 +501,98 @@ describe("runNight", () => {
         timedOut: false,
       },
     ]);
+    // The queue behind the interrupted Card was never Claimed; the morning must still account for it.
+    expect(report?.notStarted.map((c) => c.identifier)).toEqual(["CFA-111"]);
     // The Morning Report landed, with the interruption in it.
     expect(reports.at(-1)).toEqual(report);
+    expect(logLines).toContain("Interrupted by user; CFA-111 not started");
     expect(logLines.at(-1)).toBe(
-      "Night Run interrupted by user: 0 done, 1 Bounced, 0 not started; Morning Report written",
+      "Night Run interrupted by user: 0 done, 1 Bounced, 1 not started; Morning Report written",
     );
+  });
+
+  it("winds down on Ctrl+C between Cards: the finished Card lands, the rest are not started, nothing more is Claimed", async () => {
+    const { port, interrupt } = manualInterruption();
+    const { deps, events, reports } = harness(
+      [card({ identifier: "CFA-112", priority: 1 }), card({ identifier: "CFA-113", priority: 2 })],
+      {
+        interruption: port,
+        sessionResult: (r) => {
+          interrupt(); // Ctrl+C arrives while CFA-112's session runs to completion
+          return { kind: "success", prUrls: [`https://github.com/${r.repo}/pull/1`] };
+        },
+      },
+    );
+    const report = await runNight(deps, { stopTime: "07:00" });
+
+    expect(events).toEqual([
+      "claim CFA-112",
+      "execute CFA-112",
+      "in-review CFA-112 https://github.com/cfarvidson/example/pull/1",
+    ]);
+    expect(report?.interrupted).toBe(true);
+    expect(report?.ran.map((r) => r.card.identifier)).toEqual(["CFA-112"]);
+    expect(report?.notStarted.map((c) => c.identifier)).toEqual(["CFA-113"]);
+    expect(reports.at(-1)).toEqual(report);
+  });
+
+  it("cuts a Backoff wait short on Ctrl+C and Bounces the in-flight Card as interrupted", async () => {
+    const { port, interrupt } = manualInterruption();
+    const { deps, events } = harness([card({ identifier: "CFA-114" })], {
+      interruption: port,
+      sessionResult: () => {
+        interrupt(); // Ctrl+C arrives during the Backoff wait that follows
+        return { kind: "rate-limited" };
+      },
+    });
+    // A real Backoff wait is minutes long; only the interruption may end it here.
+    deps.clock = { now: deps.clock.now, sleep: () => new Promise(() => {}) };
+    const report = await runNight(deps, { stopTime: "07:00" });
+
+    expect(events).toEqual([
+      "claim CFA-114",
+      "execute CFA-114",
+      "bounce CFA-114: interrupted by user during Night Run",
+    ]);
+    expect(report?.interrupted).toBe(true);
+  });
+
+  it("reports an executor error during Ctrl+C as interrupted, not as a session failure", async () => {
+    const { port, interrupt } = manualInterruption();
+    const { deps, events } = harness([card({ identifier: "CFA-115" })], {
+      interruption: port,
+      sessionResult: () => {
+        interrupt(); // Ctrl+C killed the executor's git/gh child mid-setup
+        throw new Error("gh pr list was killed by SIGINT");
+      },
+    });
+    const report = await runNight(deps, { stopTime: "07:00" });
+
+    expect(events).toEqual([
+      "claim CFA-115",
+      "execute CFA-115",
+      "bounce CFA-115: interrupted by user during Night Run",
+    ]);
+    expect(report?.interrupted).toBe(true);
+  });
+
+  it("never starts the night when Ctrl+C arrives during planning: no prompt, no writes", async () => {
+    const { port, interrupt } = manualInterruption();
+    interrupt();
+    const confirms: Plan[] = [];
+    const { deps, events, reports } = harness([card({ identifier: "CFA-116" })], {
+      interruption: port,
+      confirm: async (plan) => {
+        confirms.push(plan);
+        return true;
+      },
+    });
+    const report = await runNight(deps, { stopTime: "07:00" });
+
+    expect(report).toBeNull();
+    expect(confirms).toEqual([]);
+    expect(events).toEqual([]);
+    expect(reports).toEqual([]);
   });
 
   it("writes the Morning Report incrementally: after Plan-time Bounces and after every Card outcome", async () => {
