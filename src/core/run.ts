@@ -26,7 +26,14 @@ async function executeWithinStopTime(
 ): Promise<Exclude<CardSessionResult, { kind: "rate-limited" }>> {
   let wait = BACKOFF_BASE_MS;
   for (;;) {
-    const result = await deps.executor.execute(runnable);
+    let result: CardSessionResult;
+    try {
+      result = await deps.executor.execute(runnable);
+    } catch (error) {
+      // Infrastructure trouble (a leftover worktree, a network blip) costs
+      // this one Card, not the rest of the night: it Bounces like any failure.
+      return { kind: "failure", reason: error instanceof Error ? error.message : String(error) };
+    }
     if (result.kind !== "rate-limited") return result;
     if (deps.clock.now() >= deadline) {
       return {
