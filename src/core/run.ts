@@ -1,5 +1,5 @@
 import { planNight } from "./plan.js";
-import { RateLimitError, withRateLimitRetry } from "./rate-limit.js";
+import { BACKOFF_BASE_MS, BACKOFF_CAP_MS, withRateLimitRetry } from "./rate-limit.js";
 import { formatDuration } from "./report.js";
 import type { CardSessionResult, MorningReport, Plan, RunDeps, RunnableCard, RunOptions } from "./types.js";
 
@@ -13,7 +13,8 @@ function nextStopTime(start: Date, stopTime: string): Date {
 }
 
 /**
- * A rate-limited session retries only until the Stop Time; past it, the Card is
+ * A rate-limited session (a `rate-limited` result, never an exception) retries
+ * with doubling Backoff, but only until the Stop Time; past it, the Card is
  * Bounced instead. Linear calls, by contrast, retry without a deadline - those
  * limits are short-lived and a paused write must still land.
  */
@@ -22,18 +23,27 @@ async function executeWithinStopTime(
   runnable: RunnableCard,
   deadline: Date,
   onWait: (waitMs: number) => void,
-): Promise<CardSessionResult> {
-  try {
-    return await withRateLimitRetry(deps.clock, () => deps.executor.execute(runnable), {
-      retryUntil: deadline,
-      onWait,
-    });
-  } catch (error) {
-    if (!(error instanceof RateLimitError)) throw error;
-    return {
-      kind: "failure",
-      reason: `Card Session for ${runnable.card.identifier} was rate limited and the Stop Time passed before it could be retried`,
-    };
+): Promise<Exclude<CardSessionResult, { kind: "rate-limited" }>> {
+  let wait = BACKOFF_BASE_MS;
+  for (;;) {
+    let result: CardSessionResult;
+    try {
+      result = await deps.executor.execute(runnable);
+    } catch (error) {
+      // Infrastructure trouble (a leftover worktree, a network blip) costs
+      // this one Card, not the rest of the night: it Bounces like any failure.
+      return { kind: "failure", reason: error instanceof Error ? error.message : String(error) };
+    }
+    if (result.kind !== "rate-limited") return result;
+    if (deps.clock.now() >= deadline) {
+      return {
+        kind: "failure",
+        reason: `Card Session for ${runnable.card.identifier} was rate limited and the Stop Time passed before it could be retried`,
+      };
+    }
+    onWait(wait);
+    await deps.clock.sleep(wait);
+    wait = Math.min(wait * 2, BACKOFF_CAP_MS);
   }
 }
 

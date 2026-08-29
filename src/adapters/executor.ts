@@ -3,7 +3,6 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ClaudeProfile } from "../claude-profile.js";
-import { RateLimitError } from "../core/rate-limit.js";
 import { formatDuration } from "../core/report.js";
 import type { CardExecutorPort, CardSessionResult, RunnableCard } from "../core/types.js";
 
@@ -91,14 +90,7 @@ export function makeCardExecutor(options: ExecutorOptions): CardExecutorPort {
   // worktree, but a leftover from an earlier night stays a hard error.
   const ownWorktrees = new Set<string>();
   return {
-    async execute(runnable: RunnableCard): Promise<CardSessionResult> {
-      try {
-        return await runSession(runnable, options, ownWorktrees);
-      } catch (error) {
-        if (error instanceof RateLimitError) throw error;
-        return { kind: "failure", reason: error instanceof Error ? error.message : String(error) };
-      }
-    },
+    execute: (runnable: RunnableCard) => runSession(runnable, options, ownWorktrees),
   };
 }
 
@@ -305,10 +297,10 @@ async function runSession(
   }
   if (session.status !== 0) {
     if (RATE_LIMIT_OUTPUT.test(session.outputTail)) {
-      throw new RateLimitError(`Card Session for ${card.identifier} reported rate limiting or exhausted quota`);
+      return { kind: "rate-limited" };
     }
     const how = session.status === null ? `was killed by ${session.signal}` : `exited with status ${session.status}`;
-    throw new Error(`Card Session for ${card.identifier} ${how}`);
+    return { kind: "failure", reason: `Card Session for ${card.identifier} ${how}` };
   }
 
   const prListOutput = execFileSync(
@@ -318,7 +310,7 @@ async function runSession(
   ).trim();
   const prUrls = prListOutput === "" ? [] : prListOutput.split("\n");
   if (prUrls.length === 0) {
-    throw new Error(`Card Session for ${card.identifier} finished without creating a PR`);
+    return { kind: "failure", reason: `Card Session for ${card.identifier} finished without creating a PR` };
   }
   return { kind: "success", prUrls };
 }

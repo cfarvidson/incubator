@@ -61,11 +61,13 @@ export interface Plan {
   excluded: ExcludedCard[];
 }
 
-/** The outcome of one Card Session: PR links, failure, or timeout (per CFA-166). */
+/** The outcome of one Card Session: PR links, failure, timeout (per CFA-166), or rate limiting (per CFA-175). */
 export type CardSessionResult =
   | { kind: "success"; prUrls: string[] }
   | { kind: "failure"; reason: string }
-  | { kind: "timeout"; reason: string };
+  | { kind: "timeout"; reason: string }
+  /** Rate limiting is a value on this seam, never an exception; core retries with Backoff until the Stop Time. */
+  | { kind: "rate-limited" };
 
 export interface CardExecutorPort {
   /** Runs one Card Session in its own worktree of the target repo. */

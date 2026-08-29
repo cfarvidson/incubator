@@ -200,7 +200,7 @@ describe("runNight", () => {
     const { deps, events } = harness([card({ identifier: "CFA-80" })], {
       sessionResult: (r) => {
         attempts += 1;
-        if (attempts <= 5) throw new RateLimitError("Claude CLI reported rate limiting");
+        if (attempts <= 5) return { kind: "rate-limited" };
         return { kind: "success", prUrls: [`https://github.com/${r.repo}/pull/1`] };
       },
     });
@@ -254,7 +254,7 @@ describe("runNight", () => {
         sessionResult: (r) => {
           if (r.card.identifier === "CFA-82") {
             now = new Date("2026-01-06T07:10:00");
-            throw new RateLimitError("Claude CLI reported rate limiting");
+            return { kind: "rate-limited" };
           }
           return { kind: "success", prUrls: [`https://github.com/${r.repo}/pull/1`] };
         },
@@ -328,6 +328,39 @@ describe("runNight", () => {
     expect(reports.at(-1)).toEqual(report);
   });
 
+  it("bounces a Card whose executor throws, and the night continues with the next Card", async () => {
+    const { deps, events, reports } = harness(
+      [card({ identifier: "CFA-90", priority: 1 }), card({ identifier: "CFA-91", priority: 2 })],
+      {
+        sessionResult: (r) => {
+          if (r.card.identifier === "CFA-90") throw new Error("worktree /clones/example-cfa-90 already exists");
+          return { kind: "success", prUrls: [`https://github.com/${r.repo}/pull/1`] };
+        },
+      },
+    );
+    const report = await runNight(deps, { stopTime: "07:00" });
+
+    expect(events).toEqual([
+      "claim CFA-90",
+      "execute CFA-90",
+      "bounce CFA-90: worktree /clones/example-cfa-90 already exists",
+      "claim CFA-91",
+      "execute CFA-91",
+      "in-review CFA-91 https://github.com/cfarvidson/example/pull/1",
+    ]);
+    expect(report?.crashReason).toBeUndefined();
+    expect(report?.bounced).toEqual([
+      {
+        card: expect.objectContaining({ identifier: "CFA-90" }),
+        reason: "worktree /clones/example-cfa-90 already exists",
+        durationMs: 0,
+        timedOut: false,
+      },
+    ]);
+    expect(report?.ran.map((r) => r.card.identifier)).toEqual(["CFA-91"]);
+    expect(reports.at(-1)).toEqual(report);
+  });
+
   it("records each Card's wall-clock duration in the report; Plan-time Bounces have none", async () => {
     let t = new Date("2026-01-05T22:00:00").getTime();
     const { deps } = harness(
@@ -371,7 +404,7 @@ describe("runNight", () => {
       {
         sessionResult: (r) => {
           attempts += 1;
-          if (attempts === 1) throw new RateLimitError("Claude CLI reported rate limiting");
+          if (attempts === 1) return { kind: "rate-limited" };
           return { kind: "success", prUrls: [`https://github.com/${r.repo}/pull/1`] };
         },
       },
