@@ -200,7 +200,7 @@ describe("runNight", () => {
     const { deps, events } = harness([card({ identifier: "CFA-80" })], {
       sessionResult: (r) => {
         attempts += 1;
-        if (attempts <= 5) throw new RateLimitError("Claude CLI reported rate limiting");
+        if (attempts <= 5) return { kind: "rate-limited" };
         return { kind: "success", prUrls: [`https://github.com/${r.repo}/pull/1`] };
       },
     });
@@ -254,7 +254,7 @@ describe("runNight", () => {
         sessionResult: (r) => {
           if (r.card.identifier === "CFA-82") {
             now = new Date("2026-01-06T07:10:00");
-            throw new RateLimitError("Claude CLI reported rate limiting");
+            return { kind: "rate-limited" };
           }
           return { kind: "success", prUrls: [`https://github.com/${r.repo}/pull/1`] };
         },
@@ -371,7 +371,7 @@ describe("runNight", () => {
       {
         sessionResult: (r) => {
           attempts += 1;
-          if (attempts === 1) throw new RateLimitError("Claude CLI reported rate limiting");
+          if (attempts === 1) return { kind: "rate-limited" };
           return { kind: "success", prUrls: [`https://github.com/${r.repo}/pull/1`] };
         },
       },
