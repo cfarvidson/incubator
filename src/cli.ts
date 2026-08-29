@@ -79,6 +79,7 @@ async function main() {
         durationCap: durationCapFromMinutes(config.durationCapMinutes),
         harness,
         sessionHints,
+        autoCodeReview: profile.autoCodeReview,
         log: (message) => runLog.log(message),
       }),
       runLog,

@@ -11,7 +11,7 @@ The Runner itself is a deterministic script, not an agent. Each Card runs in its
 1. `pnpm night` fetches the Night Queue from the active profile's tracker: issues assigned to me, open, label `ready-for-agent` (Linear: the whole work workspace; GitHub: the profile's owner/repo scope).
 2. It prints the Plan: which Cards will run in what order, and which get Bounced for an incomplete Brief.
 3. One yes/no Abort Prompt. Answering no touches nothing, no tracker writes, no sessions, no worktrees.
-4. For each Card: Claim it (Linear: Todo -> In Progress; GitHub: label `in-progress`), run a headless agent session in a fresh worktree, then either mark it done with PR links or Bounce it back with `needs-info` and a comment explaining why.
+4. For each Card: Claim it (Linear: Todo -> In Progress; GitHub: label `in-progress`), run a headless agent session in a fresh worktree, then either mark it done with PR links or Bounce it back with `needs-info` and a comment explaining why. With `autoCodeReview` (the default), a Review Session then `/code-review`s the new PR, applies the fixes, and posts the report as a PR comment.
 5. The night ends when the queue is empty or the Stop Time passes. A Morning Report and a timestamped Run Log land in `nights/`.
 
 A Card Session that exceeds the Duration Cap (default 2h) gets its whole process tree killed and the Card is Bounced. Rate limits pause the night with doubling backoff (1 to 15 minutes) rather than aborting it; after the Stop Time a rate-limited Card is Bounced instead of retried. `caffeinate` keeps the Mac awake for exactly as long as the Runner lives.
@@ -68,6 +68,7 @@ Each Tracker Profile has:
 | `tracker` | required | `{ "kind": "linear" }`, or `{ "kind": "github", "scope": [...] }` where `scope` lists GitHub owners (`cfarvidson`) and/or repos (`owner/name`) searched for Cards. |
 | `cloneRoots` | required | Directories searched for local clones of the repos named in Repo Lines. `~` expands. |
 | `harness` | none | Default Harness Profile for this profile; `--harness` overrides. |
+| `autoCodeReview` | `true` | After a Card Session opens its PR, run a Review Session in the same worktree (on the same Harness Profile, any kind): `/code-review` the branch, apply the clear-cut fixes, push, and post the report as a PR comment. A review that fails, times out, or is interrupted never fails the Card; the Runner then posts a comment on the PR saying the review was aborted and why. Each Review Session gets its own Duration Cap. |
 
 Each Harness Profile (an agent CLI Card Sessions run on) has:
 

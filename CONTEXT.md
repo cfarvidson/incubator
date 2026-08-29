@@ -36,6 +36,9 @@ _Avoid_: orchestrator, daemon
 **Card Session**:
 The headless agent session that executes a single Card in its own git worktree of the target repository, on the run's Harness Profile.
 
+**Review Session**:
+The headless agent session that follows a successful Card Session when the Tracker Profile's `autoCodeReview` is on (the default): in the same worktree, on the same Harness Profile, it runs `/code-review` against the branch (the Brief as spec), applies the clear-cut fixes, pushes them, and posts the review report as a PR comment. A Review Session that fails, times out, or is interrupted never fails the Card (the PR already exists); the Runner instead posts a comment on the PR saying the review was aborted and why.
+
 **Harness Profile**:
 A named agent CLI Card Sessions run on: a kind (`claude`, `codex`, or `custom` with an args template), optionally a command, env vars, and a model. Defined in `incubator.config.json` under `harnesses`; a real run picks exactly one (`--harness <name>`, else the Tracker Profile's `harness` default) and refuses to start without one. `--model` overrides the model per run.
 _Avoid_: Claude Profile (the old name), alias, account

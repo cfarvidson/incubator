@@ -14,6 +14,8 @@ export interface ExecutorOptions {
   harness: HarnessProfile;
   /** How a Card Session may comment on its Card; supplied by the active tracker. */
   sessionHints: TrackerSessionHints;
+  /** Run a Review Session (/code-review) on each PR a Card Session opens; the Tracker Profile's autoCodeReview. */
+  autoCodeReview: boolean;
   /** Run Log line, so an interrupted night is reconstructable in the morning. */
   log: (message: string) => void;
 }
@@ -64,9 +66,56 @@ export function makeCardExecutor(options: ExecutorOptions): CardExecutorPort {
       if (prUrls.length === 0) {
         return { kind: "failure", reason: `Card Session for ${card.identifier} finished without creating a PR` };
       }
+      if (options.autoCodeReview) await reviewPullRequests(runnable, prUrls, worktreePath);
       return { kind: "success", prUrls };
     },
   };
+
+  /**
+   * The PR already exists, so a Review Session that fails, times out, or is
+   * interrupted never fails the Card; instead the Runner posts a comment on the
+   * PR saying the review was aborted and why, so an unreviewed PR is visible
+   * where it will be read, not only in the Run Log.
+   */
+  async function reviewPullRequests(runnable: RunnableCard, prUrls: string[], worktreePath: string): Promise<void> {
+    const { card } = runnable;
+    options.log(`Auto code review for ${card.identifier}: ${prUrls.join(" ")}`);
+    const renderer = makeSessionRenderer();
+    const review = await supervisor.run(
+      options.harness.command,
+      cardSessionPolicy.reviewArgs(runnable, options.harness, prUrls),
+      {
+        cwd: worktreePath,
+        env: { ...process.env, ...options.harness.env },
+        capMs: options.durationCap.ms,
+        onStdout: (chunk) => renderer.feed(chunk),
+        onStderr: (chunk) => process.stderr.write(chunk),
+        onInterrupt: () => options.log(`Interrupted (Ctrl+C); Review Session for ${card.identifier} stopped`),
+      },
+    );
+    renderer.end();
+    const aborted = reviewAborted(review, options.durationCap);
+    if (!aborted) return;
+    options.log(`Review Session for ${card.identifier} ${aborted}; the PR stands as created`);
+    const body = `Auto code review was aborted: the Review Session ${aborted}. This PR may be partially or not at all reviewed; review it manually.`;
+    for (const url of prUrls) {
+      try {
+        execFileSync("gh", ["pr", "comment", url, "--body", body], { cwd: worktreePath, stdio: "ignore" });
+      } catch {
+        options.log(`Could not post the aborted-review comment on ${url}`);
+      }
+    }
+  }
+}
+
+/** Why a Review Session did not finish, as a sentence fragment; null means it exited cleanly. */
+function reviewAborted(review: ProcessEnd, cap: DurationCap): string | null {
+  if (review.interrupted) return "was interrupted (Ctrl+C wound the night down)";
+  if (review.timedOut) return `hit the ${cap.prose} Duration Cap and was stopped`;
+  if (review.status !== 0) {
+    return review.status === null ? `was killed by ${review.signal}` : `exited with status ${review.status}`;
+  }
+  return null;
 }
 
 /** The non-success outcomes of a session, in precedence order; null means it exited cleanly. */

@@ -21,6 +21,8 @@ export interface TrackerProfile {
   cloneRoots: string[];
   /** Default Harness Profile for this Tracker Profile; `--harness` overrides. */
   harness: string | null;
+  /** Run a Review Session (/code-review) on each PR a Card Session opens. */
+  autoCodeReview: boolean;
 }
 
 export interface Config {
@@ -42,6 +44,7 @@ interface RawProfile {
   tracker?: { kind?: string; scope?: string[]; assumeAssignee?: unknown };
   cloneRoots?: string[];
   harness?: string;
+  autoCodeReview?: unknown;
 }
 
 export function loadConfig(path: string = CONFIG_PATH): Config {
@@ -95,7 +98,17 @@ function loadProfile(name: string, raw: RawProfile): TrackerProfile {
   } else {
     throw new Error(`Profile "${name}": tracker.kind must be "linear" or "github", got ${JSON.stringify(kind)}`);
   }
-  return { name, tracker, cloneRoots: raw.cloneRoots.map((root) => resolve(expandHome(root))), harness: raw.harness ?? null };
+  const autoCodeReview = raw.autoCodeReview ?? true;
+  if (typeof autoCodeReview !== "boolean") {
+    throw new Error(`Profile "${name}": autoCodeReview must be true or false, got ${JSON.stringify(autoCodeReview)}`);
+  }
+  return {
+    name,
+    tracker,
+    cloneRoots: raw.cloneRoots.map((root) => resolve(expandHome(root))),
+    harness: raw.harness ?? null,
+    autoCodeReview,
+  };
 }
 
 /** Picks the Tracker Profile for this run: --profile <name>, else defaultProfile, else the sole profile. */

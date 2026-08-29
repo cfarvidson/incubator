@@ -28,7 +28,7 @@ describe("loadConfig", () => {
       stopTime: "07:00",
       harnesses: {},
       profiles: {
-        work: { name: "work", tracker: { kind: "linear" }, cloneRoots: ["/tmp/clones"], harness: null },
+        work: { name: "work", tracker: { kind: "linear" }, cloneRoots: ["/tmp/clones"], harness: null, autoCodeReview: true },
       },
       defaultProfile: null,
     });
@@ -95,6 +95,25 @@ describe("loadConfig", () => {
         }),
       ),
     ).toThrowError(/assumeAssignee/);
+  });
+
+  it("defaults autoCodeReview to true, honors an explicit false, and rejects a non-boolean value", () => {
+    const loaded = loadConfig(
+      configFile({
+        profiles: {
+          work: WORK_PROFILE,
+          quiet: { tracker: { kind: "linear" }, cloneRoots: ["/c"], autoCodeReview: false },
+        },
+      }),
+    );
+    expect(loaded.profiles["work"]!.autoCodeReview).toBe(true);
+    expect(loaded.profiles["quiet"]!.autoCodeReview).toBe(false);
+
+    expect(() =>
+      loadConfig(
+        configFile({ profiles: { work: { tracker: { kind: "linear" }, cloneRoots: ["/c"], autoCodeReview: "yes" } } }),
+      ),
+    ).toThrowError(/autoCodeReview/);
   });
 
   it("rejects a github tracker without a scope", () => {

@@ -115,6 +115,49 @@ describe("cardSessionPolicy", () => {
     ]);
   });
 
+  it("writes a review prompt naming the PR, the code-review skill, and carrying the Brief as spec", () => {
+    const prompt = cardSessionPolicy.reviewPrompt(runnable(), ["https://github.com/cfarvidson/example/pull/9"]);
+
+    expect(prompt).toContain("Review Session for Card CFA-7: Fix the thing");
+    expect(prompt).toContain("https://github.com/cfarvidson/example/pull/9");
+    expect(prompt).toContain("code-review skill");
+    expect(prompt).toContain("## Acceptance criteria");
+    expect(prompt).toContain("gh pr comment");
+    expect(prompt).toContain("push the fixes to cfa-7-fix-the-thing");
+  });
+
+  it("builds review args on the claude shape, adding Skill and Task for the code-review skill", () => {
+    const args = cardSessionPolicy.reviewArgs(runnable(), harness(), ["https://github.com/cfarvidson/example/pull/9"]);
+
+    expect(args.slice(0, 2)).toEqual([
+      "-p",
+      cardSessionPolicy.reviewPrompt(runnable(), ["https://github.com/cfarvidson/example/pull/9"]),
+    ]);
+    const allowed = args[args.indexOf("--allowedTools") + 1]!;
+    expect(allowed).toContain("Skill");
+    expect(allowed).toContain("Task");
+    expect(args[args.indexOf("--disallowedTools") + 1]).toBe(cardSessionPolicy.disallowedTools.join(","));
+    expect(cardSessionPolicy.reviewArgs(runnable(), harness({ model: "claude-opus-5" }), ["u"])).toContain("--model");
+  });
+
+  it("builds codex review args on the codex shape, review prompt last", () => {
+    const codex = harness({ name: "wcodex", kind: "codex", command: "wcodex" });
+    const args = cardSessionPolicy.reviewArgs(runnable(), codex, ["https://github.com/cfarvidson/example/pull/9"]);
+
+    expect(args[0]).toBe("exec");
+    expect(args).toEqual(expect.arrayContaining(["--sandbox", "workspace-write"]));
+    expect(args.at(-1)).toBe(cardSessionPolicy.reviewPrompt(runnable(), ["https://github.com/cfarvidson/example/pull/9"]));
+    expect(args).not.toContain("--allowedTools");
+  });
+
+  it("substitutes the review prompt into a custom args template", () => {
+    const templated = harness({ args: ["--headless", "{prompt}"] });
+    expect(cardSessionPolicy.reviewArgs(runnable(), templated, ["u"])).toEqual([
+      "--headless",
+      cardSessionPolicy.reviewPrompt(runnable(), ["u"]),
+    ]);
+  });
+
   it("denies the destructive git and gh escapes, in depth behind the pre-push hook", () => {
     expect(cardSessionPolicy.disallowedTools).toContain("Bash(git push --force:*)");
     expect(cardSessionPolicy.disallowedTools).toContain("Bash(gh pr merge:*)");
