@@ -22,17 +22,18 @@ function expandHome(value: string): string {
 }
 
 /**
- * Picks the Claude Profile named by `--claude <name>`. Required for a real run
- * (fail-fast, before any Linear reads or writes); a dry run may omit it but a
- * given name is still validated. Returns null only when omitted and not required.
+ * Picks the Claude Profile named by `--claude <name>`, falling back to the
+ * Tracker Profile's default (`defaultName`). Required for a real run (fail-fast,
+ * before any tracker reads or writes); a dry run may omit it but a given name
+ * is still validated. Returns null only when unnamed and not required.
  */
 export function resolveClaudeProfile(
   argv: string[],
   claudes: Record<string, ClaudeProfileConfig>,
-  options: { required: boolean },
+  options: { required: boolean; defaultName?: string | null },
 ): ClaudeProfile | null {
   const flagIndex = argv.indexOf("--claude");
-  if (flagIndex === -1 && !options.required) return null;
+  if (flagIndex === -1 && !options.defaultName && !options.required) return null;
 
   const names = Object.keys(claudes);
   if (names.length === 0) {
@@ -40,12 +41,15 @@ export function resolveClaudeProfile(
   }
   const listing = `Configured Claude Profiles: ${names.map((n) => `"${n}"`).join(", ")}`;
 
+  let name: string | undefined;
   if (flagIndex === -1) {
-    throw new Error(`A Night Run requires --claude <name>. ${listing}`);
-  }
-  const name = argv[flagIndex + 1];
-  if (!name || name.startsWith("-")) {
-    throw new Error(`--claude requires a profile name. ${listing}`);
+    name = options.defaultName ?? undefined;
+    if (!name) throw new Error(`A Night Run requires --claude <name> (or a "claude" default on the profile). ${listing}`);
+  } else {
+    name = argv[flagIndex + 1];
+    if (!name || name.startsWith("-")) {
+      throw new Error(`--claude requires a profile name. ${listing}`);
+    }
   }
   const config = claudes[name];
   if (!config) {

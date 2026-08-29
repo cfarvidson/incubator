@@ -1,6 +1,6 @@
 import type { ClockPort } from "./types.js";
 
-/** Thrown by the Linear adapter when the Linear API reports rate limiting or exhausted quota. */
+/** Thrown by a tracker adapter when the tracker's API reports rate limiting or exhausted quota. */
 export class RateLimitError extends Error {}
 
 export const BACKOFF_BASE_MS = 60_000;
@@ -14,7 +14,7 @@ export interface RetryOptions {
 /**
  * Rate limiting pauses the night, it never aborts it: retry with doubling
  * backoff (1 min up to 15 min between attempts). Any other error propagates
- * untouched. This wrapper is for Linear calls, which retry without a deadline;
+ * untouched. This wrapper is for tracker calls, which retry without a deadline;
  * a Card Session reports rate limiting as a `rate-limited` result instead, and
  * core retries it with the same Backoff only until the Stop Time.
  */

@@ -4,21 +4,20 @@ import type { RunnableCard } from "../core/types.js";
 
 /**
  * The Card Session's permissions, per CFA-168: full autonomy inside the worktree,
- * push its own branch, create PRs, comment on its own Card in Linear. The deny list
+ * push its own branch, create PRs, comment on its own Card in its tracker. The deny list
  * is defense in depth only; the enforced guard is the pre-push hook in `hooksDir`,
  * installed per-worktree, which blocks main/master pushes and remote branch deletion
  * no matter how the command was phrased.
  */
-const ALLOWED_TOOLS = [
-  "Edit",
-  "Write",
-  "Read",
-  "Glob",
-  "Grep",
-  "TodoWrite",
-  "Bash",
-  "mcp__linear-work__save_comment",
-];
+/** What the active tracker contributes to a Card Session: how it may comment on its own Card. */
+export interface TrackerSessionHints {
+  /** Tools beyond the base list the session needs to comment on its Card (may be empty). */
+  allowedTools: string[];
+  /** Completes "you may add a comment to it ..." in the session prompt. */
+  howToComment(card: { url: string }): string;
+}
+
+const BASE_ALLOWED_TOOLS = ["Edit", "Write", "Read", "Glob", "Grep", "TodoWrite", "Bash"];
 
 const DISALLOWED_TOOLS = [
   "Bash(git push origin main:*)",
@@ -36,10 +35,10 @@ const DISALLOWED_TOOLS = [
   "Bash(gh api:*)",
 ];
 
-function sessionPrompt(runnable: RunnableCard): string {
+function sessionPrompt(runnable: RunnableCard, hints: TrackerSessionHints): string {
   const { card, repo } = runnable;
   return [
-    `You are an unattended Card Session executing Linear Card ${card.identifier}: ${card.title}.`,
+    `You are an unattended Card Session executing Card ${card.identifier}: ${card.title}.`,
     `You are in a dedicated git worktree of ${repo} on branch ${card.branchName}, created from the latest default branch.`,
     "",
     "The Brief:",
@@ -50,30 +49,32 @@ function sessionPrompt(runnable: RunnableCard): string {
     "Stay inside this worktree; never touch other checkouts of the repo.",
     `When done: commit your work, push the branch (git push -u origin ${card.branchName}),`,
     `and create a pull request with gh pr create, mentioning ${card.identifier} in the PR body.`,
-    "Never push to main/master, never merge, never delete branches. Do not change the Card's state in Linear;",
-    "you may add a comment to it via the linear-work save_comment tool if something needs explaining.",
+    "Never push to main/master, never merge, never delete branches. Do not change the Card's state in its tracker;",
+    `you may add a comment to it ${hints.howToComment(card)} if something needs explaining.`,
   ].join("\n");
 }
 
 /** Everything that defines what a Card Session may do and how it is started. */
 export const cardSessionPolicy = {
-  allowedTools: ALLOWED_TOOLS,
+  allowedTools(hints: TrackerSessionHints): string[] {
+    return [...BASE_ALLOWED_TOOLS, ...hints.allowedTools];
+  },
   disallowedTools: DISALLOWED_TOOLS,
   /** The pre-push guard, installed per-worktree so it never touches the user's own checkout. */
   hooksDir: join(dirname(fileURLToPath(import.meta.url)), "..", "..", "hooks"),
   prompt: sessionPrompt,
   /** The full claude CLI argument list for one Card Session. */
-  cliArgs(runnable: RunnableCard, model: string | null): string[] {
+  cliArgs(runnable: RunnableCard, model: string | null, hints: TrackerSessionHints): string[] {
     return [
       "-p",
-      sessionPrompt(runnable),
+      sessionPrompt(runnable, hints),
       // Print mode is silent until the session ends; stream-json (which requires
       // --verbose) surfaces progress so the night is watchable, not hang-like.
       "--output-format",
       "stream-json",
       "--verbose",
       "--allowedTools",
-      ALLOWED_TOOLS.join(","),
+      this.allowedTools(hints).join(","),
       "--disallowedTools",
       DISALLOWED_TOOLS.join(","),
       ...(model ? ["--model", model] : []),

@@ -2,6 +2,8 @@
 
 Issues and specs for this repo live in Linear, in the personal team **cfarvidson**. Use the `mcp__linear-work__*` MCP tools for all operations (load them via ToolSearch first).
 
+**This file covers incubator's own development issues only.** The Cards the Runner serves live in the tracker of the active Tracker Profile (`incubator.config.json` -> `profiles`; the run picks one with `--profile`, else `defaultProfile`) - Linear at work, GitHub Issues at home. Skills that touch Cards (`/groom`, the Night Run) must follow the active profile's conventions in [trackers/linear.md](trackers/linear.md) or [trackers/github.md](trackers/github.md), not this file.
+
 ## Conventions
 
 - **Create an issue**: `save_issue` with `team: "cfarvidson"`, a title, and a markdown description.

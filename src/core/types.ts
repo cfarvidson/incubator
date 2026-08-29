@@ -1,28 +1,31 @@
-/** A Card: a Linear issue eligible for a Night Run. See CONTEXT.md. */
+/** A Card: a tracker issue eligible for a Night Run. See CONTEXT.md. */
 export interface Card {
   identifier: string;
   title: string;
-  /** The Brief: the Card's full body (Linear calls this the description). */
+  /** The Brief: the Card's full body (the issue description). */
   brief: string;
-  /** Linear priority: 0 = none, 1 = urgent, 2 = high, 3 = medium, 4 = low */
+  /** Urgency on Linear's scale: 0 = none, 1 = urgent, 2 = high, 3 = medium, 4 = low. Other trackers map onto it. */
   priority: number;
   url: string;
-  /** Linear's suggested git branch name for the issue. */
+  /** The git branch name for the Card's work; the tracker adapter supplies or generates it. */
   branchName: string;
-  /** Whether the Card's team has a `needs-info` label; without one a Bounce cannot land. */
-  teamHasNeedsInfo: boolean;
+  /** Whether a Bounce can land where this Card lives (a `needs-info` label exists on its Linear team / GitHub repo). */
+  canBounce: boolean;
+  /** The repo the Card itself lives in, when the tracker knows it (GitHub); a Brief without a Repo Line targets it. */
+  homeRepo?: string;
 }
 
-export interface LinearPort {
-  /** The Night Queue per ADR-0002: assigned to me + Todo + label `ready-for-agent`, any team. */
+/** One issue tracker serving Cards (per ADR-0003 the active Tracker Profile picks which). */
+export interface TrackerPort {
+  /** The Night Queue per ADR-0002: open, assigned to me, labelled `ready-for-agent`, not yet Claimed. */
   fetchNightQueue(): Promise<Card[]>;
-  /** Stranded Cards: Claimed by a Night Run that never finished, still In Progress. */
+  /** Stranded Cards: Claimed by a Night Run that never finished, still marked in progress. */
   fetchStranded(): Promise<Card[]>;
-  /** Claim: move the Card from Todo to In Progress so no other run takes it; leaves a Claim comment. */
+  /** Claim: mark the Card in progress so no other run takes it; leaves a Claim comment. */
   claim(card: Card): Promise<void>;
-  /** Move the Card to In Review (never Done) with a comment linking its PRs. */
+  /** Mark the Card in review (never done) with a comment linking its PRs; it leaves the Night Queue. */
   markInReview(card: Card, prUrls: string[]): Promise<void>;
-  /** Bounce: back to Todo, `ready-for-agent` swapped for `needs-info`, explanatory comment. */
+  /** Bounce: back to the groomable state, `ready-for-agent` swapped for `needs-info`, explanatory comment. */
   bounce(card: Card, reason: string): Promise<void>;
 }
 
@@ -30,7 +33,7 @@ export interface LinearPort {
 export type ResolveClone = (repo: string) => string | null;
 
 export interface PlanDeps {
-  linear: Pick<LinearPort, "fetchNightQueue" | "fetchStranded">;
+  tracker: Pick<TrackerPort, "fetchNightQueue" | "fetchStranded">;
   resolveClone: ResolveClone;
 }
 
@@ -49,7 +52,7 @@ export interface BouncedCard {
   timedOut?: boolean;
 }
 
-/** A Card excluded at Plan time because its team is not onboarded; it gets no Linear writes at all. */
+/** A Card excluded at Plan time because it is not onboarded; it gets no tracker writes at all. */
 export interface ExcludedCard {
   card: Card;
   reason: string;
@@ -87,7 +90,7 @@ export interface MorningReport {
   ran: RanCard[];
   /** Every Bounced Card - at Plan time or after a failed/timed-out session. */
   bounced: BouncedCard[];
-  /** Cards from teams that are not onboarded; untouched in Linear. */
+  /** Cards from teams/repos that are not onboarded; untouched in the tracker. */
   excluded: ExcludedCard[];
   /** Runnable Cards never started because the Stop Time was reached; they stay in the Night Queue. */
   notStarted: Card[];
@@ -103,7 +106,7 @@ export interface ClockPort {
 }
 
 /**
- * Ctrl+C as a value for the windows outside a Card Session (planning, Linear
+ * Ctrl+C as a value for the windows outside a Card Session (planning, tracker
  * writes, Backoff sleeps); the supervisor covers Ctrl+C mid-session. The run
  * winds down at the next safe point instead of dying report-less.
  */
@@ -125,7 +128,7 @@ export interface MorningReportPort {
 }
 
 export interface RunDeps extends PlanDeps {
-  linear: LinearPort;
+  tracker: TrackerPort;
   executor: CardExecutorPort;
   runLog: RunLogPort;
   morningReport: MorningReportPort;

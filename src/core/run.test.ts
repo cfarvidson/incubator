@@ -42,7 +42,7 @@ function harness(cards: Card[], { sessionResult, confirm, now, fetchNightQueue, 
         events.push(`sleep ${ms}`);
       },
     },
-    linear: {
+    tracker: {
       fetchNightQueue: fetchNightQueue ?? (async () => cards),
       fetchStranded: async () => stranded ?? [],
       claim: async (c) => {
@@ -160,7 +160,7 @@ describe("runNight", () => {
     expect(report?.notStarted.map((c) => c.identifier)).toEqual(["CFA-74"]);
   });
 
-  it("runs nothing when the abort prompt is declined: no Linear writes, no sessions, no report", async () => {
+  it("runs nothing when the abort prompt is declined: no tracker writes, no sessions, no report", async () => {
     const { deps, events, reports } = harness(
       [card({ identifier: "CFA-50" }), card({ identifier: "CFA-51", brief: "no repo line here" })],
       { confirm: async () => false },
@@ -199,7 +199,7 @@ describe("runNight", () => {
     expect(reports.at(-1)).toEqual(report);
   });
 
-  it("bounces a Plan-time invalid Card in Linear before any session starts", async () => {
+  it("bounces a Plan-time invalid Card in the tracker before any session starts", async () => {
     const { deps, events } = harness([
       card({ identifier: "CFA-30", brief: "no repo line here", priority: 1 }),
       card({ identifier: "CFA-31", priority: 2 }),
@@ -243,13 +243,13 @@ describe("runNight", () => {
     expect(report?.ran.map((r) => r.card.identifier)).toEqual(["CFA-80"]);
   });
 
-  it("waits and retries when the Linear API reports rate limiting, then continues the night", async () => {
+  it("waits and retries when the tracker API reports rate limiting, then continues the night", async () => {
     let fetches = 0;
     const queued = [card({ identifier: "CFA-81" })];
     const { deps, events } = harness(queued, {
       fetchNightQueue: async () => {
         fetches += 1;
-        if (fetches === 1) throw new RateLimitError("Linear API rate limited");
+        if (fetches === 1) throw new RateLimitError("tracker API rate limited");
         return queued;
       },
     });
@@ -291,7 +291,7 @@ describe("runNight", () => {
     expect(reports.at(-1)).toEqual(report);
   });
 
-  it("handles an empty Night Queue: no Linear writes, no sessions, the report still lands", async () => {
+  it("handles an empty Night Queue: no tracker writes, no sessions, the report still lands", async () => {
     const { deps, events, reports } = harness([]);
     const report = await runNight(deps, { stopTime: "07:00" });
 
@@ -302,7 +302,7 @@ describe("runNight", () => {
 
   it("touches an excluded Card in no way: no claim, no bounce, no comment, no session", async () => {
     const { deps, events, reports, logLines } = harness([
-      card({ identifier: "CFA-96", teamHasNeedsInfo: false, priority: 1 }),
+      card({ identifier: "CFA-96", canBounce: false, priority: 1 }),
       card({ identifier: "CFA-97", priority: 2 }),
     ]);
     const report = await runNight(deps, { stopTime: "07:00" });
@@ -315,11 +315,11 @@ describe("runNight", () => {
     expect(report?.excluded).toEqual([
       {
         card: expect.objectContaining({ identifier: "CFA-96" }),
-        reason: "Team not onboarded: it has no `needs-info` label, so a Bounce cannot land",
+        reason: "Not onboarded: no `needs-info` label exists where this Card lives, so a Bounce cannot land",
       },
     ]);
     expect(logLines).toContain(
-      "Excluded CFA-96 (no Linear writes): Team not onboarded: it has no `needs-info` label, so a Bounce cannot land",
+      "Excluded CFA-96 (no tracker writes): Not onboarded: no `needs-info` label exists where this Card lives, so a Bounce cannot land",
     );
     expect(reports.at(-1)).toEqual(report);
   });
@@ -442,12 +442,12 @@ describe("runNight", () => {
 
   it("logs a fatal error before rethrowing, so the run log never ends mid-mystery", async () => {
     const { deps, logLines } = harness([card({ identifier: "CFA-95" })]);
-    deps.linear.claim = async () => {
-      throw new Error("Linear API error: issue not found");
+    deps.tracker.claim = async () => {
+      throw new Error("tracker API error: issue not found");
     };
 
     await expect(runNight(deps, { stopTime: "07:00" })).rejects.toThrow("issue not found");
-    expect(logLines.at(-1)).toBe("Night Run crashed: Linear API error: issue not found");
+    expect(logLines.at(-1)).toBe("Night Run crashed: tracker API error: issue not found");
   });
 
   it("logs nothing when the abort prompt is declined", async () => {
@@ -617,14 +617,14 @@ describe("runNight", () => {
       card({ identifier: "CFA-103", priority: 2 }),
     ]);
     let calls = 0;
-    deps.linear.markInReview = async () => {
+    deps.tracker.markInReview = async () => {
       calls += 1;
-      if (calls === 2) throw new Error("Linear API error: boom");
+      if (calls === 2) throw new Error("tracker API error: boom");
     };
 
     await expect(runNight(deps, { stopTime: "07:00" })).rejects.toThrow("boom");
     const last = reports.at(-1);
-    expect(last?.crashReason).toBe("Linear API error: boom");
+    expect(last?.crashReason).toBe("tracker API error: boom");
     expect(last?.ran.map((entry) => entry.card.identifier)).toEqual(["CFA-102"]);
   });
 

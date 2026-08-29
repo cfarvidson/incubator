@@ -2,11 +2,12 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { makeCloneResolver } from "./adapters/clone-resolver.js";
 import { makeCardExecutor } from "./adapters/executor.js";
+import { githubSessionHints, makeGithubPort } from "./adapters/github.js";
 import { makeInterruptionWatcher } from "./adapters/interruption.js";
-import { makeLinearPort } from "./adapters/linear.js";
+import { linearSessionHints, makeLinearPort } from "./adapters/linear.js";
 import { makeMorningReportWriter, makeRunLog, nightDateStamp } from "./adapters/report.js";
 import { resolveClaudeProfile } from "./claude-profile.js";
-import { loadConfig } from "./config.js";
+import { loadConfig, resolveTrackerProfile, type TrackerConfig } from "./config.js";
 import { durationCapFromMinutes } from "./core/duration-cap.js";
 import { planNight } from "./core/plan.js";
 import { withRateLimitRetry } from "./core/rate-limit.js";
@@ -30,28 +31,36 @@ async function askToStart(): Promise<boolean> {
   return /^y(es)?$/i.test(answer.trim());
 }
 
+/** The active Tracker Profile picks the tracker adapter and the session hints that go with it. */
+function makeTracker(trackerConfig: TrackerConfig) {
+  return trackerConfig.kind === "github"
+    ? { tracker: makeGithubPort(trackerConfig.scope), sessionHints: githubSessionHints }
+    : { tracker: makeLinearPort(), sessionHints: linearSessionHints };
+}
+
 async function main() {
   const config = loadConfig();
   const dryRun = process.argv.includes("--dry-run");
-  // Fail-fast before any Linear traffic: a whole night on the wrong Claude Profile is expensive.
-  const profile = resolveClaudeProfile(process.argv, config.claudes, { required: !dryRun });
-  const linear = makeLinearPort();
+  const profile = resolveTrackerProfile(process.argv, config);
+  // Fail-fast before any tracker traffic: a whole night on the wrong Claude Profile is expensive.
+  const claude = resolveClaudeProfile(process.argv, config.claudes, { required: !dryRun, defaultName: profile.claude });
+  const { tracker, sessionHints } = makeTracker(profile.tracker);
   const clock: ClockPort = {
     now: () => new Date(),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   };
   // Dead auth aborts, but a startup rate limit pauses the night like any other.
-  await withRateLimitRetry(clock, () => linear.checkAuth());
-  const resolveClone = makeCloneResolver(config.cloneRoots);
+  await withRateLimitRetry(clock, () => tracker.checkAuth());
+  const resolveClone = makeCloneResolver(profile.cloneRoots);
 
   if (dryRun) {
-    const plan = await planNight({ linear, resolveClone });
-    console.log(renderPlan(plan, profile?.name ?? null).join("\n"));
+    const plan = await planNight({ tracker, resolveClone });
+    console.log(renderPlan(plan, claude?.name ?? null).join("\n"));
     console.log(renderDryRunSummary(plan).join("\n"));
     return;
   }
 
-  if (!profile) throw new Error("A Night Run requires a Claude Profile"); // unreachable: required above
+  if (!claude) throw new Error("A Night Run requires a Claude Profile"); // unreachable: required above
   preventSleep();
   // First Ctrl+C winds the night down at the next safe point; a second is the
   // user insisting, and exits without the Bounce and Morning Report guarantees.
@@ -69,24 +78,25 @@ async function main() {
   const runLog = makeRunLog(nightDate);
   const report = await runNight(
     {
-      linear,
+      tracker,
       resolveClone,
       executor: makeCardExecutor({
         durationCap: durationCapFromMinutes(config.durationCapMinutes),
         model: config.model,
-        profile,
+        profile: claude,
+        sessionHints,
         log: (message) => runLog.log(message),
       }),
       runLog,
-      morningReport: makeMorningReportWriter(nightDate, profile.name),
+      morningReport: makeMorningReportWriter(nightDate, claude.name),
       clock,
       interruption,
       confirm: async (plan) => {
-        console.log(renderPlan(plan, profile.name).join("\n"));
+        console.log(renderPlan(plan, claude.name).join("\n"));
         return askToStart();
       },
     },
-    { stopTime: config.stopTime, claudeProfile: profile.name },
+    { stopTime: config.stopTime, claudeProfile: claude.name },
   );
 
   if (!report) {

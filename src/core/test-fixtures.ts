@@ -16,7 +16,7 @@ export function card(overrides: Partial<Card>): Card {
     priority: 0,
     url: "https://linear.app/tv4/issue/CFA-1",
     branchName: "cfa-1-a-card",
-    teamHasNeedsInfo: true,
+    canBounce: true,
     ...overrides,
   };
 }

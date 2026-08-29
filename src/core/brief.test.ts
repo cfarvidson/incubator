@@ -23,6 +23,17 @@ describe("checkBrief", () => {
     });
   });
 
+  it("falls back to the home repo when the Brief has no Repo Line", () => {
+    expect(checkBrief("## Goal\nDo it.\n\n## Verification\nRun it.", "cfarvidson/example")).toEqual({
+      runnable: true,
+      repo: "cfarvidson/example",
+    });
+  });
+
+  it("lets an explicit Repo Line outrank the home repo", () => {
+    expect(checkBrief(complete, "cfarvidson/other")).toEqual({ runnable: true, repo: "cfarvidson/example" });
+  });
+
   it("rejects a Repo Line that is not owner/name", () => {
     expect(checkBrief("Repo: just-a-name\n\n## Goal\nDo it.\n\n## Verification\nRun it.")).toEqual({
       runnable: false,

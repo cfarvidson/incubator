@@ -1,5 +1,13 @@
 import { RateLimitError } from "../core/rate-limit.js";
-import type { Card, LinearPort } from "../core/types.js";
+import type { Card, TrackerPort } from "../core/types.js";
+import { CLAIM_COMMENT, isStranded } from "./claim-marker.js";
+import type { TrackerSessionHints } from "./session-policy.js";
+
+/** A Card Session comments on its Linear Card through the linear-work MCP tool. */
+export const linearSessionHints: TrackerSessionHints = {
+  allowedTools: ["mcp__linear-work__save_comment"],
+  howToComment: () => "via the linear-work save_comment tool",
+};
 
 /** The Night Queue filter per ADR-0002: assigned to me + Todo + label `ready-for-agent`, any team. */
 export const NIGHT_QUEUE_FILTER = {
@@ -14,19 +22,6 @@ export const STRANDED_FILTER = {
   state: { name: { eq: "In Progress" } },
   labels: { name: { eq: "ready-for-agent" } },
 };
-
-/** The Claim marker; every terminal outcome comment starts with "Night Run result:" instead. */
-export const CLAIM_COMMENT =
-  "Night Run: Claimed. If no `Night Run result:` comment follows, the run died and this Card is Stranded.";
-
-/**
- * A Card is Stranded when its latest Night Run comment (chronological order) is a Claim
- * with no terminal result after it: the run died between Claim and outcome.
- */
-export function isStranded(commentBodiesOldestFirst: string[]): boolean {
-  const lastNightRunComment = [...commentBodiesOldestFirst].reverse().find((body) => body.startsWith("Night Run"));
-  return lastNightRunComment?.startsWith("Night Run: Claimed.") ?? false;
-}
 
 interface Label {
   id: string;
@@ -164,7 +159,7 @@ const COMMENT_MUTATION = `
   }
 `;
 
-export function makeLinearPort(): LinearPort & { checkAuth(): Promise<void> } {
+export function makeLinearPort(): TrackerPort & { checkAuth(): Promise<void> } {
   const apiKey = process.env["LINEAR_API_KEY"];
   if (!apiKey) {
     throw new Error(
@@ -248,7 +243,7 @@ export function makeLinearPort(): LinearPort & { checkAuth(): Promise<void> } {
       return data.issues.nodes.map(({ description, team, ...node }) => ({
         ...node,
         brief: description ?? "",
-        teamHasNeedsInfo: team.labels.nodes.length > 0,
+        canBounce: team.labels.nodes.length > 0,
       }));
     },
 
@@ -278,7 +273,7 @@ export function makeLinearPort(): LinearPort & { checkAuth(): Promise<void> } {
         .map(({ description, team, comments: _comments, ...node }) => ({
           ...node,
           brief: description ?? "",
-          teamHasNeedsInfo: team.labels.nodes.length > 0,
+          canBounce: team.labels.nodes.length > 0,
         }));
     },
 
