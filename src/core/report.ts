@@ -1,4 +1,72 @@
-import type { BouncedCard, MorningReport } from "./types.js";
+import { PRIORITY_NAMES } from "./plan.js";
+import type { BouncedCard, MorningReport, Plan } from "./types.js";
+
+const NOTHING_TOUCHED = "No Linear writes, no sessions, no worktrees.";
+
+/** Renders tonight's Plan for the terminal: run order with priorities, Bounces, and exclusions. */
+export function renderPlan(plan: Plan, claudeProfile: string | null): string[] {
+  const lines = [claudeProfile ? `Tonight's Plan - Claude Profile: ${claudeProfile}` : "Tonight's Plan", ""];
+
+  if (plan.runnable.length === 0) {
+    lines.push("  Nothing runnable in the Night Queue.");
+  } else {
+    lines.push("  Would run, in order:");
+    plan.runnable.forEach((r, i) => {
+      lines.push(`  ${i + 1}. ${r.card.identifier} [${PRIORITY_NAMES[r.card.priority] ?? "?"}] ${r.card.title}`);
+      lines.push(`     ${r.repo} -> ${r.clonePath}`);
+    });
+  }
+
+  if (plan.bounced.length > 0) {
+    lines.push("", "  Would bounce:");
+    for (const b of plan.bounced) {
+      lines.push(`  - ${b.card.identifier} ${b.card.title}`, `    ${b.reason}`);
+    }
+  }
+
+  if (plan.excluded.length > 0) {
+    lines.push("", "  Would exclude (no Linear writes):");
+    for (const e of plan.excluded) {
+      lines.push(`  - ${e.card.identifier} ${e.card.title}`, `    ${e.reason}`);
+    }
+  }
+
+  return lines;
+}
+
+/** The dry-run closing line: Plan counts plus the promise that nothing was touched. */
+export function renderDryRunSummary(plan: Plan): string[] {
+  return [
+    "",
+    `  ${plan.runnable.length} runnable, ${plan.bounced.length} bounced, ${plan.excluded.length} excluded. ${NOTHING_TOUCHED}`,
+  ];
+}
+
+/** The terminal message when the user declines to start the Night Run. */
+export function renderAborted(): string[] {
+  return ["", `Aborted. ${NOTHING_TOUCHED}`];
+}
+
+/** The terminal summary after a finished Night Run: every Card outcome, one line each. */
+export function renderFinishSummary(report: MorningReport): string[] {
+  const lines = ["", "Night Run finished."];
+  for (const entry of report.ran) {
+    lines.push(`  ran ${entry.card.identifier} ${entry.card.title}`);
+    for (const url of entry.prUrls) lines.push(`    ${url}`);
+  }
+  for (const b of report.bounced) {
+    lines.push(`  bounced ${b.card.identifier}: ${b.reason}`);
+  }
+  for (const e of report.excluded) {
+    lines.push(`  excluded ${e.card.identifier}: ${e.reason}`);
+  }
+  for (const c of report.notStarted) {
+    lines.push(`  not started (Stop Time reached): ${c.identifier} ${c.title}`);
+  }
+  if (report.ran.length === 0) lines.push("  No Card ran.");
+  lines.push("  Morning Report and run log written under nights/.");
+  return lines;
+}
 
 /** Morning-friendly wall-clock duration: minutes below an hour, "2h 05m" above. */
 export function formatDuration(ms: number): string {

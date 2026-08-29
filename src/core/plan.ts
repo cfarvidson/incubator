@@ -1,6 +1,9 @@
 import type { Plan, PlanDeps } from "./types.js";
 import { bounceReasons, checkBrief } from "./brief.js";
 
+/** Display names for the Linear priority scale the Night Queue sorts by (0 = none, sorted last). */
+export const PRIORITY_NAMES: Record<number, string> = { 0: "none", 1: "urgent", 2: "high", 3: "medium", 4: "low" };
+
 /** Builds tonight's Plan: dry-run only, no side effects (CFA-167). */
 export async function planNight(deps: PlanDeps): Promise<Plan> {
   const queue = await deps.linear.fetchNightQueue();

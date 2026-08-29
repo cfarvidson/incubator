@@ -4,46 +4,13 @@ import { makeCloneResolver } from "./adapters/clone-resolver.js";
 import { makeCardExecutor } from "./adapters/executor.js";
 import { makeLinearPort } from "./adapters/linear.js";
 import { makeMorningReportWriter, makeRunLog, nightDateStamp } from "./adapters/report.js";
-import { resolveClaudeProfile, type ClaudeProfile } from "./claude-profile.js";
+import { resolveClaudeProfile } from "./claude-profile.js";
 import { loadConfig } from "./config.js";
 import { planNight } from "./core/plan.js";
 import { withRateLimitRetry } from "./core/rate-limit.js";
+import { renderAborted, renderDryRunSummary, renderFinishSummary, renderPlan } from "./core/report.js";
 import { runNight } from "./core/run.js";
-import type { ClockPort, Plan } from "./core/types.js";
-
-const PRIORITY_NAMES: Record<number, string> = { 0: "none", 1: "urgent", 2: "high", 3: "medium", 4: "low" };
-
-const NOTHING_TOUCHED = "No Linear writes, no sessions, no worktrees.";
-
-function printPlan(plan: Plan, profile: ClaudeProfile | null) {
-  console.log(profile ? `Tonight's Plan - Claude Profile: ${profile.name}\n` : "Tonight's Plan\n");
-
-  if (plan.runnable.length === 0) {
-    console.log("  Nothing runnable in the Night Queue.");
-  } else {
-    console.log(`  Would run, in order:`);
-    plan.runnable.forEach((r, i) => {
-      console.log(`  ${i + 1}. ${r.card.identifier} [${PRIORITY_NAMES[r.card.priority] ?? "?"}] ${r.card.title}`);
-      console.log(`     ${r.repo} -> ${r.clonePath}`);
-    });
-  }
-
-  if (plan.bounced.length > 0) {
-    console.log(`\n  Would bounce:`);
-    for (const b of plan.bounced) {
-      console.log(`  - ${b.card.identifier} ${b.card.title}`);
-      console.log(`    ${b.reason}`);
-    }
-  }
-
-  if (plan.excluded.length > 0) {
-    console.log(`\n  Would exclude (no Linear writes):`);
-    for (const e of plan.excluded) {
-      console.log(`  - ${e.card.identifier} ${e.card.title}`);
-      console.log(`    ${e.reason}`);
-    }
-  }
-}
+import type { ClockPort } from "./core/types.js";
 
 /** Keeps the Mac awake exactly as long as the Runner lives: caffeinate exits with this process. */
 function preventSleep() {
@@ -77,10 +44,8 @@ async function main() {
 
   if (dryRun) {
     const plan = await planNight({ linear, resolveClone });
-    printPlan(plan, profile);
-    console.log(
-      `\n  ${plan.runnable.length} runnable, ${plan.bounced.length} bounced, ${plan.excluded.length} excluded. ${NOTHING_TOUCHED}`,
-    );
+    console.log(renderPlan(plan, profile?.name ?? null).join("\n"));
+    console.log(renderDryRunSummary(plan).join("\n"));
     return;
   }
 
@@ -102,7 +67,7 @@ async function main() {
       morningReport: makeMorningReportWriter(nightDate, profile.name),
       clock,
       confirm: async (plan) => {
-        printPlan(plan, profile);
+        console.log(renderPlan(plan, profile.name).join("\n"));
         return askToStart();
       },
     },
@@ -110,26 +75,11 @@ async function main() {
   );
 
   if (!report) {
-    console.log(`\nAborted. ${NOTHING_TOUCHED}`);
+    console.log(renderAborted().join("\n"));
     return;
   }
 
-  console.log("\nNight Run finished.");
-  for (const entry of report.ran) {
-    console.log(`  ran ${entry.card.identifier} ${entry.card.title}`);
-    for (const url of entry.prUrls) console.log(`    ${url}`);
-  }
-  for (const b of report.bounced) {
-    console.log(`  bounced ${b.card.identifier}: ${b.reason}`);
-  }
-  for (const e of report.excluded) {
-    console.log(`  excluded ${e.card.identifier}: ${e.reason}`);
-  }
-  for (const c of report.notStarted) {
-    console.log(`  not started (Stop Time reached): ${c.identifier} ${c.title}`);
-  }
-  if (report.ran.length === 0) console.log("  No Card ran.");
-  console.log("  Morning Report and run log written under nights/.");
+  console.log(renderFinishSummary(report).join("\n"));
 }
 
 main().catch((error) => {
