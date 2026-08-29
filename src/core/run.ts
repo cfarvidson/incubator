@@ -30,6 +30,9 @@ async function executeWithinStopTime(
     try {
       result = await deps.executor.execute(runnable);
     } catch (error) {
+      // Ctrl+C outside the session itself kills the executor's git/gh child
+      // and surfaces here as an error; the interruption outranks its prose.
+      if (deps.interruption.interrupted()) return { kind: "interrupted" };
       // Infrastructure trouble (a leftover worktree, a network blip) costs
       // this one Card, not the rest of the night: it Bounces like any failure.
       return { kind: "failure", reason: error instanceof Error ? error.message : String(error) };
@@ -42,7 +45,9 @@ async function executeWithinStopTime(
       };
     }
     onWait(wait);
-    await deps.clock.sleep(wait);
+    // A Backoff wait can be 15 minutes; Ctrl+C cuts it short instead of sitting it out.
+    await Promise.race([deps.clock.sleep(wait), deps.interruption.whenInterrupted()]);
+    if (deps.interruption.interrupted()) return { kind: "interrupted" };
     wait = Math.min(wait * 2, BACKOFF_CAP_MS);
   }
 }
@@ -53,6 +58,8 @@ export async function runNight(deps: RunDeps, options: RunOptions): Promise<Morn
 
   // No onWait here: nothing may reach the Run Log before the Abort Prompt is answered.
   const plan = await withRateLimitRetry(deps.clock, () => planNight(deps));
+  // Ctrl+C while planning: nothing is written yet, so the night simply never starts.
+  if (deps.interruption.interrupted()) return null;
   if (!(await deps.confirm(plan))) return null;
   const profileNote = options.claudeProfile ? ` (Claude Profile ${options.claudeProfile})` : "";
   deps.runLog.log(
@@ -102,8 +109,15 @@ async function workTheQueue(
   await deps.morningReport.write(report);
 
   const deadline = nextStopTime(deps.clock.now(), options.stopTime);
-  for (const runnable of plan.runnable) {
+  for (const [index, runnable] of plan.runnable.entries()) {
     const { card } = runnable;
+    if (deps.interruption.interrupted()) {
+      // Ctrl+C between Cards: nothing here was Claimed, so no Bounce - the
+      // rest of the queue stays in Linear untouched and is reported as not started.
+      windDownInterrupted(deps, plan, report, index);
+      await deps.morningReport.write(report);
+      break;
+    }
     if (deps.clock.now() >= deadline) {
       report.notStarted.push(card);
       deps.runLog.log(`Stop Time reached; ${card.identifier} not started`);
@@ -115,6 +129,16 @@ async function workTheQueue(
     const startedAt = deps.clock.now();
     const result = await executeWithinStopTime(deps, runnable, deadline, onWait);
     const durationMs = deps.clock.now().getTime() - startedAt.getTime();
+    if (result.kind === "interrupted") {
+      // Ctrl+C: Bounce the in-flight Card and land the report before cli.ts exits 130.
+      const reason = "interrupted by user during Night Run";
+      await retry(() => deps.linear.bounce(card, reason));
+      report.bounced.push({ card, reason, durationMs, timedOut: false });
+      deps.runLog.log(`${card.identifier} interrupted after ${formatDuration(durationMs)}; Bounced: ${reason}`);
+      windDownInterrupted(deps, plan, report, index + 1);
+      await deps.morningReport.write(report);
+      break;
+    }
     if (result.kind === "success") {
       await retry(() => deps.linear.markInReview(card, result.prUrls));
       report.ran.push({ card, prUrls: result.prUrls, durationMs });
@@ -129,7 +153,17 @@ async function workTheQueue(
     await deps.morningReport.write(report);
   }
 
+  const ending = report.interrupted ? "Night Run interrupted by user" : "Night Run finished";
   deps.runLog.log(
-    `Night Run finished: ${report.ran.length} done, ${report.bounced.length} Bounced, ${report.notStarted.length} not started; Morning Report written`,
+    `${ending}: ${report.ran.length} done, ${report.bounced.length} Bounced, ${report.notStarted.length} not started; Morning Report written`,
   );
+}
+
+/** Marks the night interrupted; the Cards that never started stay in the Night Queue and are reported as such. */
+function windDownInterrupted(deps: RunDeps, plan: Plan, report: MorningReport, fromIndex: number): void {
+  report.interrupted = true;
+  const remaining = plan.runnable.slice(fromIndex).map((r) => r.card);
+  if (remaining.length === 0) return;
+  report.notStarted.push(...remaining);
+  deps.runLog.log(`Interrupted by user; ${remaining.map((c) => c.identifier).join(", ")} not started`);
 }

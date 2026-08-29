@@ -75,3 +75,7 @@ The single yes/no gate shown after the Plan; declining runs nothing - no Linear 
 
 **Backoff**:
 The wait-and-retry response to rate limiting or exhausted quota (1 to 15 minutes, doubling). Rate limits pause the night, they never abort it; once the Stop Time passes, a rate-limited Card is Bounced instead of retried.
+
+**Interrupted**:
+Ctrl+C during a Night Run. The run winds down at the next safe point: the in-flight Card is Bounced, the rest of the queue is reported as not started, the Morning Report lands, and the Runner exits 130. A second Ctrl+C exits immediately, without those guarantees.
+_Avoid_: aborted (that is declining the Abort Prompt), cancelled

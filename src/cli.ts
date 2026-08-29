@@ -2,10 +2,12 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { makeCloneResolver } from "./adapters/clone-resolver.js";
 import { makeCardExecutor } from "./adapters/executor.js";
+import { makeInterruptionWatcher } from "./adapters/interruption.js";
 import { makeLinearPort } from "./adapters/linear.js";
 import { makeMorningReportWriter, makeRunLog, nightDateStamp } from "./adapters/report.js";
 import { resolveClaudeProfile } from "./claude-profile.js";
 import { loadConfig } from "./config.js";
+import { durationCapFromMinutes } from "./core/duration-cap.js";
 import { planNight } from "./core/plan.js";
 import { withRateLimitRetry } from "./core/rate-limit.js";
 import { renderAborted, renderDryRunSummary, renderFinishSummary, renderPlan } from "./core/report.js";
@@ -51,6 +53,18 @@ async function main() {
 
   if (!profile) throw new Error("A Night Run requires a Claude Profile"); // unreachable: required above
   preventSleep();
+  // First Ctrl+C winds the night down at the next safe point; a second is the
+  // user insisting, and exits without the Bounce and Morning Report guarantees.
+  let sigints = 0;
+  process.on("SIGINT", () => {
+    sigints += 1;
+    if (sigints === 1) {
+      console.error("\nCtrl+C: winding down the Night Run; press Ctrl+C again to exit immediately.");
+    } else {
+      process.exit(130);
+    }
+  });
+  const interruption = makeInterruptionWatcher();
   const nightDate = nightDateStamp(new Date());
   const runLog = makeRunLog(nightDate);
   const report = await runNight(
@@ -58,7 +72,7 @@ async function main() {
       linear,
       resolveClone,
       executor: makeCardExecutor({
-        durationCapMs: config.durationCapMinutes * 60_000,
+        durationCap: durationCapFromMinutes(config.durationCapMinutes),
         model: config.model,
         profile,
         log: (message) => runLog.log(message),
@@ -66,6 +80,7 @@ async function main() {
       runLog,
       morningReport: makeMorningReportWriter(nightDate, profile.name),
       clock,
+      interruption,
       confirm: async (plan) => {
         console.log(renderPlan(plan, profile.name).join("\n"));
         return askToStart();
@@ -76,10 +91,14 @@ async function main() {
 
   if (!report) {
     console.log(renderAborted().join("\n"));
+    if (interruption.interrupted()) process.exit(130);
     return;
   }
 
   console.log(renderFinishSummary(report).join("\n"));
+  // Ctrl+C ends the night with the conventional SIGINT exit code, but only
+  // here, after the Bounce and the Morning Report have landed.
+  if (report.interrupted) process.exit(130);
 }
 
 main().catch((error) => {

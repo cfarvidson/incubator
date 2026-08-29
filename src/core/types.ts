@@ -66,6 +66,8 @@ export type CardSessionResult =
   | { kind: "success"; prUrls: string[] }
   | { kind: "failure"; reason: string }
   | { kind: "timeout"; reason: string }
+  /** Ctrl+C during the session, as a value: core Bounces the Card, the Morning Report lands, cli.ts exits 130. */
+  | { kind: "interrupted" }
   /** Rate limiting is a value on this seam, never an exception; core retries with Backoff until the Stop Time. */
   | { kind: "rate-limited" };
 
@@ -91,11 +93,25 @@ export interface MorningReport {
   notStarted: Card[];
   /** Set when the night crashed mid-queue; the report still lands with the outcomes so far. */
   crashReason?: string;
+  /** Set when Ctrl+C stopped the night mid-session; cli.ts exits 130 after the report lands. */
+  interrupted?: boolean;
 }
 
 export interface ClockPort {
   now(): Date;
   sleep(ms: number): Promise<void>;
+}
+
+/**
+ * Ctrl+C as a value for the windows outside a Card Session (planning, Linear
+ * writes, Backoff sleeps); the supervisor covers Ctrl+C mid-session. The run
+ * winds down at the next safe point instead of dying report-less.
+ */
+export interface InterruptionPort {
+  /** True once the user pressed Ctrl+C. */
+  interrupted(): boolean;
+  /** Resolves on the first Ctrl+C; raced against a Backoff sleep so the wind-down never sits out the timer. */
+  whenInterrupted(): Promise<void>;
 }
 
 export interface RunLogPort {
@@ -114,6 +130,7 @@ export interface RunDeps extends PlanDeps {
   runLog: RunLogPort;
   morningReport: MorningReportPort;
   clock: ClockPort;
+  interruption: InterruptionPort;
   /** The one chance to abort after seeing the Plan: false runs nothing (CFA-170). */
   confirm(plan: Plan): Promise<boolean>;
 }
