@@ -13,7 +13,13 @@
       "cloneRoots": ["~/code", "~/code/TV4"],
       "harness": "wclaude"
     },
-    "home": {
+    "work-opus": {
+      "tracker": { "kind": "linear" },
+      "cloneRoots": ["~/code", "~/code/TV4"],
+      "harness": "wclaude",
+      "model": "claude-opus-5"
+    },
+    "private": {
       "tracker": {
         "kind": "github",
         "scope": ["cfarvidson/kurir-ios", "cfarvidson/kurir-server"]
