@@ -143,6 +143,6 @@ export interface RunDeps extends PlanDeps {
 export interface RunOptions {
   /** Stop Time as HH:MM - no new Card starts once the clock passes it. */
   stopTime: string;
-  /** Display-only: the Claude Profile name, recorded in the Run Log's start line. */
-  claudeProfile?: string;
+  /** Display-only: the Harness Profile name, recorded in the Run Log's start line. */
+  harnessName?: string;
 }

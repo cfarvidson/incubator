@@ -1,6 +1,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RunnableCard } from "../core/types.js";
+import type { HarnessKind, HarnessProfile } from "../harness.js";
 
 /**
  * The Card Session's permissions, per CFA-168: full autonomy inside the worktree,
@@ -35,8 +36,14 @@ const DISALLOWED_TOOLS = [
   "Bash(gh api:*)",
 ];
 
-function sessionPrompt(runnable: RunnableCard, hints: TrackerSessionHints): string {
+function sessionPrompt(runnable: RunnableCard, hints: TrackerSessionHints, kind: HarnessKind): string {
   const { card, repo } = runnable;
+  // Comment hints that need extra tools (Linear's MCP tool) only exist on the claude CLI;
+  // any other harness is told to skip commenting instead of improvising with a tool it lacks.
+  const commentLine =
+    hints.allowedTools.length > 0 && kind !== "claude"
+      ? "do not comment on it either (this harness lacks the tracker's comment tool)."
+      : `you may add a comment to it ${hints.howToComment(card)} if something needs explaining.`;
   return [
     `You are an unattended Card Session executing Card ${card.identifier}: ${card.title}.`,
     `You are in a dedicated git worktree of ${repo} on branch ${card.branchName}, created from the latest default branch.`,
@@ -50,7 +57,7 @@ function sessionPrompt(runnable: RunnableCard, hints: TrackerSessionHints): stri
     `When done: commit your work, push the branch (git push -u origin ${card.branchName}),`,
     `and create a pull request with gh pr create, mentioning ${card.identifier} in the PR body.`,
     "Never push to main/master, never merge, never delete branches. Do not change the Card's state in its tracker;",
-    `you may add a comment to it ${hints.howToComment(card)} if something needs explaining.`,
+    commentLine,
   ].join("\n");
 }
 
@@ -63,11 +70,33 @@ export const cardSessionPolicy = {
   /** The pre-push guard, installed per-worktree so it never touches the user's own checkout. */
   hooksDir: join(dirname(fileURLToPath(import.meta.url)), "..", "..", "hooks"),
   prompt: sessionPrompt,
-  /** The full claude CLI argument list for one Card Session. */
-  cliArgs(runnable: RunnableCard, model: string | null, hints: TrackerSessionHints): string[] {
+  /**
+   * The full argument list for one Card Session, shaped by the Harness Profile's
+   * kind. The claude tool policy has no equivalent elsewhere: for other kinds the
+   * per-worktree pre-push hook is the guard, as it already is in depth for claude.
+   */
+  cliArgs(runnable: RunnableCard, harness: HarnessProfile, hints: TrackerSessionHints): string[] {
+    const prompt = sessionPrompt(runnable, hints, harness.kind);
+    // A configured args template outranks the kind's built-in shape; the resolver has already
+    // checked that a set model and a "{model}" slot come together, so nothing is dropped here.
+    if (harness.args) {
+      return harness.args.map((arg) => (arg === "{prompt}" ? prompt : arg === "{model}" ? (harness.model ?? "") : arg));
+    }
+    if (harness.kind === "codex") {
+      return [
+        "exec",
+        // Sandboxed to the worktree, but with network: the session must git push and gh pr create.
+        "--sandbox",
+        "workspace-write",
+        "-c",
+        "sandbox_workspace_write.network_access=true",
+        ...(harness.model ? ["--model", harness.model] : []),
+        prompt,
+      ];
+    }
     return [
       "-p",
-      sessionPrompt(runnable, hints),
+      prompt,
       // Print mode is silent until the session ends; stream-json (which requires
       // --verbose) surfaces progress so the night is watchable, not hang-like.
       "--output-format",
@@ -77,7 +106,7 @@ export const cardSessionPolicy = {
       this.allowedTools(hints).join(","),
       "--disallowedTools",
       DISALLOWED_TOOLS.join(","),
-      ...(model ? ["--model", model] : []),
+      ...(harness.model ? ["--model", harness.model] : []),
     ];
   },
 };

@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ClaudeProfileConfig } from "./claude-profile.js";
 import { flagValue } from "./flags.js";
+import type { HarnessConfig } from "./harness.js";
+import { expandHome } from "./paths.js";
 
 /** Which tracker a Tracker Profile serves Cards from, plus what that tracker needs to find them. */
 export type TrackerConfig =
@@ -16,8 +16,8 @@ export interface TrackerProfile {
   name: string;
   tracker: TrackerConfig;
   cloneRoots: string[];
-  /** Default Claude Profile for this Tracker Profile; `--claude` overrides. */
-  claude: string | null;
+  /** Default Harness Profile for this Tracker Profile; `--harness` overrides. */
+  harness: string | null;
 }
 
 export interface Config {
@@ -25,10 +25,8 @@ export interface Config {
   durationCapMinutes: number;
   /** Stop Time as HH:MM. */
   stopTime: string;
-  /** Model for Card Sessions; null means the Claude CLI's own default. */
-  model: string | null;
-  /** Claude Profiles by name; a real run picks one with --claude <name> or the Tracker Profile's default. */
-  claudes: Record<string, ClaudeProfileConfig>;
+  /** Harness Profiles by name; a real run picks one with --harness <name> or the Tracker Profile's default. */
+  harnesses: Record<string, HarnessConfig>;
   /** Tracker Profiles by name; every run works under exactly one. */
   profiles: Record<string, TrackerProfile>;
   /** The Tracker Profile used when --profile is omitted; null means it must be named (unless only one exists). */
@@ -40,15 +38,14 @@ const CONFIG_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "incubat
 interface RawProfile {
   tracker?: { kind?: string; scope?: string[] };
   cloneRoots?: string[];
-  claude?: string;
+  harness?: string;
 }
 
 export function loadConfig(path: string = CONFIG_PATH): Config {
   const raw = JSON.parse(readFileSync(path, "utf8")) as {
     durationCapMinutes?: number;
     stopTime?: string;
-    model?: string | null;
-    claudes?: Record<string, ClaudeProfileConfig>;
+    harnesses?: Record<string, HarnessConfig>;
     profiles?: Record<string, RawProfile>;
     defaultProfile?: string;
   };
@@ -69,8 +66,7 @@ export function loadConfig(path: string = CONFIG_PATH): Config {
   return {
     durationCapMinutes: raw.durationCapMinutes ?? 120,
     stopTime,
-    model: raw.model ?? null,
-    claudes: raw.claudes ?? {},
+    harnesses: raw.harnesses ?? {},
     profiles,
     defaultProfile: raw.defaultProfile ?? null,
   };
@@ -92,14 +88,14 @@ function loadProfile(name: string, raw: RawProfile): TrackerProfile {
   } else {
     throw new Error(`Profile "${name}": tracker.kind must be "linear" or "github", got ${JSON.stringify(kind)}`);
   }
-  return { name, tracker, cloneRoots: raw.cloneRoots.map(expandHome), claude: raw.claude ?? null };
+  return { name, tracker, cloneRoots: raw.cloneRoots.map((root) => resolve(expandHome(root))), harness: raw.harness ?? null };
 }
 
 /** Picks the Tracker Profile for this run: --profile <name>, else defaultProfile, else the sole profile. */
 export function resolveTrackerProfile(argv: string[], config: Config): TrackerProfile {
   const names = Object.keys(config.profiles);
   const listing = `Configured profiles: ${names.map((n) => `"${n}"`).join(", ")}`;
-  const name = flagValue(argv, "--profile", listing);
+  const name = flagValue(argv, "--profile", `--profile requires a profile name. ${listing}`);
   if (name) {
     const profile = config.profiles[name];
     if (!profile) throw new Error(`Unknown profile "${name}". ${listing}`);
@@ -108,8 +104,4 @@ export function resolveTrackerProfile(argv: string[], config: Config): TrackerPr
   if (config.defaultProfile) return config.profiles[config.defaultProfile]!;
   if (names.length === 1) return config.profiles[names[0]!]!;
   throw new Error(`Multiple profiles and no defaultProfile; pick one with --profile <name>. ${listing}`);
-}
-
-function expandHome(path: string): string {
-  return resolve(path.startsWith("~/") ? join(homedir(), path.slice(2)) : path);
 }

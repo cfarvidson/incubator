@@ -1,21 +1,25 @@
 {
   "durationCapMinutes": 120,
   "stopTime": "07:00",
-  "model": null,
-  "claudes": {
-    "dclaude": {},
-    "wclaude": { "env": { "CLAUDE_CONFIG_DIR": "~/.claude-work" } }
+  "harnesses": {
+    "dclaude": { "kind": "claude" },
+    "wclaude": { "kind": "claude", "env": { "CLAUDE_CONFIG_DIR": "~/.claude-work" } },
+    "zcodex": { "kind": "codex", "command": "zcodex" },
+    "wcodex": { "kind": "codex", "command": "wcodex" }
   },
   "profiles": {
     "work": {
       "tracker": { "kind": "linear" },
       "cloneRoots": ["~/code", "~/code/TV4"],
-      "claude": "wclaude"
+      "harness": "wclaude"
     },
     "home": {
-      "tracker": { "kind": "github", "scope": ["cfarvidson"] },
+      "tracker": {
+        "kind": "github",
+        "scope": ["cfarvidson/kurir-ios", "cfarvidson/kurir-server"]
+      },
       "cloneRoots": ["~/code"],
-      "claude": "dclaude"
+      "harness": "dclaude"
     }
   },
   "defaultProfile": "work"

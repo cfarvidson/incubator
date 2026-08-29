@@ -429,10 +429,10 @@ describe("runNight", () => {
         },
       },
     );
-    await runNight(deps, { stopTime: "07:00", claudeProfile: "wclaude" });
+    await runNight(deps, { stopTime: "07:00", harnessName: "wclaude" });
 
     expect(logLines).toEqual([
-      "Night Run started (Claude Profile wclaude): 1 runnable, 1 Bounced at Plan time; Stop Time 07:00",
+      "Night Run started (Harness wclaude): 1 runnable, 1 Bounced at Plan time; Stop Time 07:00",
       `Bounced CFA-30 at Plan time: ${bounceReasons.noRepoLine}`,
       "Claimed CFA-31; Card Session starting",
       "Rate limited; waiting 1m before retrying",

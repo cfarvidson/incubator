@@ -65,7 +65,7 @@ describe("renderMorningReport", () => {
       [
         "# Night Run 2026-01-06",
         "",
-        "Claude Profile: wclaude",
+        "Harness: wclaude",
         "",
         "## Ran",
         "",
@@ -102,7 +102,7 @@ describe("renderMorningReport", () => {
       [
         "# Night Run 2026-01-06",
         "",
-        "Claude Profile: wclaude",
+        "Harness: wclaude",
         "",
         "**Night Run crashed:** Linear API error: boom",
         "",
@@ -115,7 +115,7 @@ describe("renderMorningReport", () => {
   it("says so when no Cards ran", () => {
     const markdown = renderMorningReport("2026-01-06", "dclaude", { ran: [], bounced: [], excluded: [], notStarted: [] });
     expect(markdown).toBe(
-      ["# Night Run 2026-01-06", "", "Claude Profile: dclaude", "", "No Cards ran.", ""].join("\n"),
+      ["# Night Run 2026-01-06", "", "Harness: dclaude", "", "No Cards ran.", ""].join("\n"),
     );
   });
 });
@@ -153,7 +153,7 @@ describe("renderPlan", () => {
     );
 
     expect(lines).toEqual([
-      "Tonight's Plan - Claude Profile: wclaude",
+      "Tonight's Plan - Harness: wclaude",
       "",
       "  Would run, in order:",
       "  1. CFA-10 [urgent] First",
@@ -171,7 +171,7 @@ describe("renderPlan", () => {
     ]);
   });
 
-  it("says so when nothing is runnable, and skips the Claude Profile when there is none", () => {
+  it("says so when nothing is runnable, and skips the Harness when there is none", () => {
     expect(renderPlan({ runnable: [], bounced: [], excluded: [] }, null)).toEqual([
       "Tonight's Plan",
       "",

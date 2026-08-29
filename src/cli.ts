@@ -5,8 +5,8 @@ import { makeCardExecutor } from "./adapters/executor.js";
 import { makeInterruptionWatcher } from "./adapters/interruption.js";
 import { makeMorningReportWriter, makeRunLog, nightDateStamp } from "./adapters/report.js";
 import { makeTracker } from "./adapters/tracker.js";
-import { resolveClaudeProfile } from "./claude-profile.js";
 import { loadConfig, resolveTrackerProfile } from "./config.js";
+import { resolveHarnessProfile } from "./harness.js";
 import { durationCapFromMinutes } from "./core/duration-cap.js";
 import { planNight } from "./core/plan.js";
 import { withRateLimitRetry } from "./core/rate-limit.js";
@@ -34,8 +34,11 @@ async function main() {
   const config = loadConfig();
   const dryRun = process.argv.includes("--dry-run");
   const profile = resolveTrackerProfile(process.argv, config);
-  // Fail-fast before any tracker traffic: a whole night on the wrong Claude Profile is expensive.
-  const claude = resolveClaudeProfile(process.argv, config.claudes, { required: !dryRun, defaultName: profile.claude });
+  // Fail-fast before any tracker traffic: a whole night on the wrong Harness Profile is expensive.
+  const harness = resolveHarnessProfile(process.argv, config.harnesses, {
+    required: !dryRun,
+    defaultName: profile.harness,
+  });
   const { tracker, sessionHints } = makeTracker(profile.tracker);
   const clock: ClockPort = {
     now: () => new Date(),
@@ -47,12 +50,12 @@ async function main() {
 
   if (dryRun) {
     const plan = await planNight({ tracker, resolveClone });
-    console.log(renderPlan(plan, claude?.name ?? null).join("\n"));
+    console.log(renderPlan(plan, harness?.name ?? null).join("\n"));
     console.log(renderDryRunSummary(plan).join("\n"));
     return;
   }
 
-  if (!claude) throw new Error("A Night Run requires a Claude Profile"); // unreachable: required above
+  if (!harness) throw new Error("A Night Run requires a Harness Profile"); // unreachable: required above
   preventSleep();
   // First Ctrl+C winds the night down at the next safe point; a second is the
   // user insisting, and exits without the Bounce and Morning Report guarantees.
@@ -74,21 +77,20 @@ async function main() {
       resolveClone,
       executor: makeCardExecutor({
         durationCap: durationCapFromMinutes(config.durationCapMinutes),
-        model: config.model,
-        profile: claude,
+        harness,
         sessionHints,
         log: (message) => runLog.log(message),
       }),
       runLog,
-      morningReport: makeMorningReportWriter(nightDate, claude.name),
+      morningReport: makeMorningReportWriter(nightDate, harness.name),
       clock,
       interruption,
       confirm: async (plan) => {
-        console.log(renderPlan(plan, claude.name).join("\n"));
+        console.log(renderPlan(plan, harness.name).join("\n"));
         return askToStart();
       },
     },
-    { stopTime: config.stopTime, claudeProfile: claude.name },
+    { stopTime: config.stopTime, harnessName: harness.name },
   );
 
   if (!report) {
