@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { card } from "./test-fixtures.js";
+import { bounceReasons } from "./brief.js";
 import { planNight } from "./plan.js";
 import type { Card, PlanDeps } from "./types.js";
 
@@ -57,7 +58,7 @@ describe("planNight", () => {
     const plan = await planNight(deps([noRepo]));
     expect(plan.runnable).toEqual([]);
     expect(plan.bounced).toEqual([
-      { card: expect.objectContaining({ identifier: "CFA-11" }), reason: "Brief has no Repo Line (`Repo: owner/name`)" },
+      { card: expect.objectContaining({ identifier: "CFA-11" }), reason: bounceReasons.noRepoLine },
     ]);
   });
 
@@ -67,7 +68,7 @@ describe("planNight", () => {
     expect(plan.bounced).toEqual([
       {
         card: expect.objectContaining({ identifier: "CFA-12" }),
-        reason: "No local clone found for cfarvidson/example under the configured clone roots",
+        reason: bounceReasons.noClone("cfarvidson/example"),
       },
     ]);
   });
@@ -81,7 +82,7 @@ describe("planNight", () => {
     expect(plan.bounced).toEqual([
       {
         card: expect.objectContaining({ identifier: "CFA-13" }),
-        reason: "Brief has no goal section (a `What to build`, `Goal`, or `Problem` heading)",
+        reason: bounceReasons.noGoal,
       },
     ]);
   });
@@ -95,7 +96,7 @@ describe("planNight", () => {
     expect(plan.bounced).toEqual([
       {
         card: expect.objectContaining({ identifier: "CFA-14" }),
-        reason: "Brief has no verification steps (an `Acceptance criteria`/`Verification` heading or `- [ ]` checklist)",
+        reason: bounceReasons.noVerification,
       },
     ]);
   });

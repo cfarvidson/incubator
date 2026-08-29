@@ -60,7 +60,7 @@ A Card needs a complete Brief or it gets Bounced at plan time:
 - A goal section carrying the scope
 - Verification steps
 
-The Bounce comment on the Linear issue says exactly what was missing, so fixing the Brief and re-labeling it queues it for the next night. `/groom` does this systematically for every blocked Card.
+The exact contract lives in `src/core/brief.ts` - that module is the authority. The Bounce comment on the Linear issue says exactly what was missing, so fixing the Brief and re-labeling it queues it for the next night. `/groom` does this systematically for every blocked Card.
 
 ## Onboarding a team
 

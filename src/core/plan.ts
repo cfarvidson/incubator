@@ -1,8 +1,5 @@
 import type { Plan, PlanDeps } from "./types.js";
-
-const REPO_LINE = /^Repo:\s*([\w.-]+\/[\w.-]+)\s*$/m;
-const GOAL_HEADING = /^#{1,4}\s*(what to build|goal|problem)/im;
-const VERIFICATION = /^#{1,4}\s*(acceptance criteria|verification)|^\s*- \[ \]/im;
+import { bounceReasons, checkBrief } from "./brief.js";
 
 /** Builds tonight's Plan: dry-run only, no side effects (CFA-167). */
 export async function planNight(deps: PlanDeps): Promise<Plan> {
@@ -27,28 +24,17 @@ export async function planNight(deps: PlanDeps): Promise<Plan> {
       plan.excluded.push({ card, reason: "Team not onboarded: it has no `needs-info` label, so a Bounce cannot land" });
       continue;
     }
-    const repo = card.brief.match(REPO_LINE)?.[1];
-    if (!repo) {
-      plan.bounced.push({ card, reason: "Brief has no Repo Line (`Repo: owner/name`)" });
+    const checked = checkBrief(card.brief);
+    if (!checked.runnable) {
+      plan.bounced.push({ card, reason: checked.reason });
       continue;
     }
-    if (!GOAL_HEADING.test(card.brief)) {
-      plan.bounced.push({ card, reason: "Brief has no goal section (a `What to build`, `Goal`, or `Problem` heading)" });
-      continue;
-    }
-    if (!VERIFICATION.test(card.brief)) {
-      plan.bounced.push({
-        card,
-        reason: "Brief has no verification steps (an `Acceptance criteria`/`Verification` heading or `- [ ]` checklist)",
-      });
-      continue;
-    }
-    const clonePath = deps.resolveClone(repo);
+    const clonePath = deps.resolveClone(checked.repo);
     if (!clonePath) {
-      plan.bounced.push({ card, reason: `No local clone found for ${repo} under the configured clone roots` });
+      plan.bounced.push({ card, reason: bounceReasons.noClone(checked.repo) });
       continue;
     }
-    plan.runnable.push({ card, repo, clonePath });
+    plan.runnable.push({ card, repo: checked.repo, clonePath });
   }
   return plan;
 }
