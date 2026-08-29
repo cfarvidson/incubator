@@ -1,6 +1,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RunnableCard } from "../core/types.js";
+import type { HarnessProfile } from "../harness.js";
 
 /**
  * The Card Session's permissions, per CFA-168: full autonomy inside the worktree,
@@ -63,11 +64,30 @@ export const cardSessionPolicy = {
   /** The pre-push guard, installed per-worktree so it never touches the user's own checkout. */
   hooksDir: join(dirname(fileURLToPath(import.meta.url)), "..", "..", "hooks"),
   prompt: sessionPrompt,
-  /** The full claude CLI argument list for one Card Session. */
-  cliArgs(runnable: RunnableCard, model: string | null, hints: TrackerSessionHints): string[] {
+  /**
+   * The full argument list for one Card Session, shaped by the Harness Profile's
+   * kind. The claude tool policy has no equivalent elsewhere: for other kinds the
+   * per-worktree pre-push hook is the guard, as it already is in depth for claude.
+   */
+  cliArgs(runnable: RunnableCard, harness: HarnessProfile, hints: TrackerSessionHints): string[] {
+    const prompt = sessionPrompt(runnable, hints);
+    // A configured args template outranks the kind's built-in shape.
+    if (harness.args) return harness.args.map((arg) => (arg === "{prompt}" ? prompt : arg));
+    if (harness.kind === "codex") {
+      return [
+        "exec",
+        // Sandboxed to the worktree, but with network: the session must git push and gh pr create.
+        "--sandbox",
+        "workspace-write",
+        "-c",
+        "sandbox_workspace_write.network_access=true",
+        ...(harness.model ? ["--model", harness.model] : []),
+        prompt,
+      ];
+    }
     return [
       "-p",
-      sessionPrompt(runnable, hints),
+      prompt,
       // Print mode is silent until the session ends; stream-json (which requires
       // --verbose) surfaces progress so the night is watchable, not hang-like.
       "--output-format",
@@ -77,7 +97,7 @@ export const cardSessionPolicy = {
       this.allowedTools(hints).join(","),
       "--disallowedTools",
       DISALLOWED_TOOLS.join(","),
-      ...(model ? ["--model", model] : []),
+      ...(harness.model ? ["--model", harness.model] : []),
     ];
   },
 };

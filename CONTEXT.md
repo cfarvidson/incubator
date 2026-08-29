@@ -9,7 +9,7 @@ An issue assigned to me, in the active Tracker Profile's tracker, that describes
 _Avoid_: ticket, task
 
 **Tracker Profile**:
-A named choice of where Cards live and how this machine runs them: a tracker (Linear, or GitHub Issues with an owner/repo scope), clone roots, and a default Claude Profile. Defined in `incubator.config.json` under `profiles`; a run works under exactly one (`--profile <name>`, else `defaultProfile`). Work reads Linear, home reads GitHub.
+A named choice of where Cards live and how this machine runs them: a tracker (Linear, or GitHub Issues with an owner/repo scope), clone roots, and a default Harness Profile. Defined in `incubator.config.json` under `profiles`; a run works under exactly one (`--profile <name>`, else `defaultProfile`). Work reads Linear, home reads GitHub.
 _Avoid_: environment, mode
 
 **Brief**:
@@ -34,11 +34,11 @@ The deterministic script that orchestrates a Night Run: shows the Plan, claims C
 _Avoid_: orchestrator, daemon
 
 **Card Session**:
-The headless Claude session that executes a single Card in its own git worktree of the target repository.
+The headless agent session that executes a single Card in its own git worktree of the target repository, on the run's Harness Profile.
 
-**Claude Profile**:
-A named way to run the Claude CLI - environment variables (e.g. `CLAUDE_CONFIG_DIR`) and optionally a command - selecting which credentials Card Sessions use. Defined in `incubator.config.json` under `claudes`; a real run picks exactly one (`--claude <name>`, else the Tracker Profile's `claude` default) and refuses to start without one.
-_Avoid_: alias, account
+**Harness Profile**:
+A named agent CLI Card Sessions run on: a kind (`claude`, `codex`, or `custom` with an args template), optionally a command, env vars, and a model. Defined in `incubator.config.json` under `harnesses`; a real run picks exactly one (`--harness <name>`, else the Tracker Profile's `harness` default) and refuses to start without one. `--model` overrides the model per run.
+_Avoid_: Claude Profile (the old name), alias, account
 
 **Groom**:
 The daytime pass over Cards that cannot run tonight - Bounced, `needs-info`, or Excluded - repairing their Briefs so they enter the Night Queue. Done interactively via the `/groom` skill; the Runner never grooms.

@@ -4,6 +4,7 @@ import { linearSessionHints } from "./linear.js";
 import { githubSessionHints } from "./github.js";
 import { cardSessionPolicy } from "./session-policy.js";
 import type { RunnableCard } from "../core/types.js";
+import type { HarnessProfile } from "../harness.js";
 
 function runnable(): RunnableCard {
   return {
@@ -11,6 +12,10 @@ function runnable(): RunnableCard {
     repo: "cfarvidson/example",
     clonePath: "/clones/example",
   };
+}
+
+function harness(overrides: Partial<HarnessProfile> = {}): HarnessProfile {
+  return { name: "dclaude", kind: "claude", command: "claude", env: {}, model: null, args: null, ...overrides };
 }
 
 describe("cardSessionPolicy", () => {
@@ -39,8 +44,8 @@ describe("cardSessionPolicy", () => {
     expect(cardSessionPolicy.allowedTools(githubSessionHints)).toContain("Bash");
   });
 
-  it("builds CLI args with the prompt, streaming output, and both tool lists", () => {
-    const args = cardSessionPolicy.cliArgs(runnable(), null, linearSessionHints);
+  it("builds claude CLI args with the prompt, streaming output, and both tool lists", () => {
+    const args = cardSessionPolicy.cliArgs(runnable(), harness(), linearSessionHints);
 
     expect(args.slice(0, 2)).toEqual(["-p", cardSessionPolicy.prompt(runnable(), linearSessionHints)]);
     expect(args).toContain("stream-json");
@@ -49,9 +54,39 @@ describe("cardSessionPolicy", () => {
     expect(args[args.indexOf("--disallowedTools") + 1]).toBe(cardSessionPolicy.disallowedTools.join(","));
   });
 
-  it("passes --model only when a model is configured", () => {
-    expect(cardSessionPolicy.cliArgs(runnable(), "claude-sonnet-5", linearSessionHints)).toContain("--model");
-    expect(cardSessionPolicy.cliArgs(runnable(), null, linearSessionHints)).not.toContain("--model");
+  it("passes --model only when the Harness Profile carries a model", () => {
+    expect(cardSessionPolicy.cliArgs(runnable(), harness({ model: "claude-opus-5" }), linearSessionHints)).toContain(
+      "--model",
+    );
+    expect(cardSessionPolicy.cliArgs(runnable(), harness(), linearSessionHints)).not.toContain("--model");
+  });
+
+  it("builds codex args: exec, worktree sandbox with network, prompt last", () => {
+    const codex = harness({ name: "wcodex", kind: "codex", command: "wcodex" });
+    const args = cardSessionPolicy.cliArgs(runnable(), codex, githubSessionHints);
+
+    expect(args[0]).toBe("exec");
+    expect(args).toEqual(expect.arrayContaining(["--sandbox", "workspace-write"]));
+    expect(args).toEqual(expect.arrayContaining(["-c", "sandbox_workspace_write.network_access=true"]));
+    expect(args.at(-1)).toBe(cardSessionPolicy.prompt(runnable(), githubSessionHints));
+    expect(args).not.toContain("--allowedTools");
+
+    const withModel = cardSessionPolicy.cliArgs(runnable(), { ...codex, model: "gpt-5.5-codex" }, githubSessionHints);
+    expect(withModel[withModel.indexOf("--model") + 1]).toBe("gpt-5.5-codex");
+  });
+
+  it("substitutes the prompt into a custom args template, which outranks the kind's shape", () => {
+    const grok = harness({ name: "grok", kind: "custom", command: "grok", args: ["-p", "{prompt}"] });
+    expect(cardSessionPolicy.cliArgs(runnable(), grok, githubSessionHints)).toEqual([
+      "-p",
+      cardSessionPolicy.prompt(runnable(), githubSessionHints),
+    ]);
+    // Also on claude: a template replaces the built-in argument shape entirely.
+    const templated = harness({ args: ["--headless", "{prompt}"] });
+    expect(cardSessionPolicy.cliArgs(runnable(), templated, linearSessionHints)).toEqual([
+      "--headless",
+      cardSessionPolicy.prompt(runnable(), linearSessionHints),
+    ]);
   });
 
   it("denies the destructive git and gh escapes, in depth behind the pre-push hook", () => {

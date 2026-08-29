@@ -1,0 +1,5 @@
+# Card Sessions run on a configurable harness, not only the Claude CLI
+
+Claude Profiles become Harness Profiles: the `harnesses` map in `incubator.config.json` names agent CLIs a Card Session can run on, each with a `kind` deciding the argument shape - `claude` (print mode, stream-json, the tool allow/deny policy), `codex` (`codex exec`, worktree sandbox with network enabled so the session can push and open PRs), or `custom` (an explicit args template with `{prompt}`, for CLIs the Runner does not know, e.g. grok). A run picks one with `--harness <name>` or the Tracker Profile's `harness` default; the model lives on the harness entry and `--model` overrides it per run.
+
+Two consequences are accepted deliberately. The claude tool policy has no equivalent on other kinds, so for them the per-worktree pre-push hook is the whole guard (it already was the enforced one). And the session renderer keeps parsing stream-json, passing unrecognized lines through raw, so non-claude output is shown untouched rather than modelled per CLI.

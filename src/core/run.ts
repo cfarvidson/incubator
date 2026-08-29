@@ -61,7 +61,7 @@ export async function runNight(deps: RunDeps, options: RunOptions): Promise<Morn
   // Ctrl+C while planning: nothing is written yet, so the night simply never starts.
   if (deps.interruption.interrupted()) return null;
   if (!(await deps.confirm(plan))) return null;
-  const profileNote = options.claudeProfile ? ` (Claude Profile ${options.claudeProfile})` : "";
+  const profileNote = options.harness ? ` (Harness ${options.harness})` : "";
   deps.runLog.log(
     `Night Run started${profileNote}: ${plan.runnable.length} runnable, ${plan.bounced.length} Bounced at Plan time; Stop Time ${options.stopTime}`,
   );

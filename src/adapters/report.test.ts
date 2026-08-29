@@ -40,7 +40,7 @@ describe("makeMorningReportWriter", () => {
       [
         "# Night Run 2026-08-29",
         "",
-        "Claude Profile: wclaude",
+        "Harness: wclaude",
         "",
         "## Ran",
         "",
@@ -60,6 +60,6 @@ describe("makeMorningReportWriter", () => {
     await writer.write({ ran: [], bounced: [], excluded: [], notStarted: [], crashReason: "boom" });
     await writer.write({ ran: [], bounced: [], excluded: [], notStarted: [] });
     const content = readFileSync(join(nightsDir, "2026-08-29.md"), "utf8");
-    expect(content).toBe("# Night Run 2026-08-29\n\nClaude Profile: wclaude\n\nNo Cards ran.\n");
+    expect(content).toBe("# Night Run 2026-08-29\n\nHarness: wclaude\n\nNo Cards ran.\n");
   });
 });

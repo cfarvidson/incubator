@@ -26,10 +26,9 @@ describe("loadConfig", () => {
     expect(config).toEqual({
       durationCapMinutes: 120,
       stopTime: "07:00",
-      model: null,
-      claudes: {},
+      harnesses: {},
       profiles: {
-        work: { name: "work", tracker: { kind: "linear" }, cloneRoots: ["/tmp/clones"], claude: null },
+        work: { name: "work", tracker: { kind: "linear" }, cloneRoots: ["/tmp/clones"], harness: null },
       },
       defaultProfile: null,
     });
@@ -40,10 +39,12 @@ describe("loadConfig", () => {
       configFile({
         durationCapMinutes: 45,
         stopTime: "06:30",
-        model: "claude-sonnet-5",
-        claudes: { wclaude: { env: { CLAUDE_CONFIG_DIR: "~/.claude-work" } } },
+        harnesses: {
+          wclaude: { kind: "claude", env: { CLAUDE_CONFIG_DIR: "~/.claude-work" } },
+          wcodex: { kind: "codex", command: "wcodex", model: "gpt-5.5-codex" },
+        },
         profiles: {
-          work: { tracker: { kind: "linear" }, cloneRoots: ["~/code"], claude: "wclaude" },
+          work: { tracker: { kind: "linear" }, cloneRoots: ["~/code"], harness: "wclaude" },
           home: { tracker: { kind: "github", scope: ["cfarvidson"] }, cloneRoots: ["/clones"] },
         },
         defaultProfile: "work",
@@ -51,13 +52,12 @@ describe("loadConfig", () => {
     );
     expect(config.profiles["work"]!.cloneRoots[0]).not.toContain("~");
     expect(config.profiles["work"]!.cloneRoots[0]).toMatch(/\/code$/);
-    expect(config.profiles["work"]!.claude).toBe("wclaude");
+    expect(config.profiles["work"]!.harness).toBe("wclaude");
     expect(config.profiles["home"]!.tracker).toEqual({ kind: "github", scope: ["cfarvidson"] });
     expect(config.defaultProfile).toBe("work");
     expect(config.durationCapMinutes).toBe(45);
     expect(config.stopTime).toBe("06:30");
-    expect(config.model).toBe("claude-sonnet-5");
-    expect(config.claudes).toEqual({ wclaude: { env: { CLAUDE_CONFIG_DIR: "~/.claude-work" } } });
+    expect(config.harnesses["wcodex"]).toEqual({ kind: "codex", command: "wcodex", model: "gpt-5.5-codex" });
   });
 
   it("rejects a malformed stopTime", () => {

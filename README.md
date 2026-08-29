@@ -19,7 +19,7 @@ A Card Session that exceeds the Duration Cap (default 2h) gets its whole process
 ## Requirements
 
 - Node 26, pnpm
-- The `claude` CLI on PATH, authenticated
+- The harness CLI(s) your Harness Profiles name (`claude`, `codex`, or a custom command) on PATH, authenticated
 - For `linear` profiles: `LINEAR_API_KEY` set (personal API key from linear.app > Settings > Security & access > Personal API keys; this repo loads it via `.envrc`)
 - For `github` profiles: the `gh` CLI authenticated (`gh auth status`)
 - Local clones of the target repos under one of the profile's clone roots
@@ -36,9 +36,10 @@ pnpm night --dry-run
 pnpm night --dry-run --profile home
 
 # Start a Night Run. --profile picks the Tracker Profile (defaultProfile when omitted);
-# --claude overrides the profile's default Claude Profile.
+# --harness overrides the profile's default Harness Profile, --model the harness's model.
 pnpm night --profile home
-pnpm night --claude <name>
+pnpm night --harness wcodex
+pnpm night --harness wclaude --model claude-opus-5
 
 pnpm test        # vitest
 pnpm typecheck   # tsc --noEmit
@@ -56,8 +57,7 @@ In a Claude Code session in this repo there is also:
 | --- | --- | --- |
 | `durationCapMinutes` | `120` | Duration Cap per Card Session. |
 | `stopTime` | `"07:00"` | Stop Time (HH:MM, 24h). No new Cards start after this. |
-| `model` | `null` | Model for Card Sessions. `null` uses the Claude CLI's default. |
-| `claudes` | required for a real run | Named Claude Profiles: per name, env vars (e.g. `CLAUDE_CONFIG_DIR`, `~` expands) and optionally a command. `--claude <name>` or the profile's `claude` picks one. |
+| `harnesses` | required for a real run | Named Harness Profiles, see below. `--harness <name>` or the profile's `harness` picks one. |
 | `profiles` | required | Named Tracker Profiles, see below. `pnpm night --profile <name>` picks one. |
 | `defaultProfile` | none | The profile used when `--profile` is omitted (a sole profile needs no default). |
 
@@ -67,7 +67,19 @@ Each Tracker Profile has:
 | --- | --- | --- |
 | `tracker` | required | `{ "kind": "linear" }`, or `{ "kind": "github", "scope": [...] }` where `scope` lists GitHub owners (`cfarvidson`) and/or repos (`owner/name`) searched for Cards. |
 | `cloneRoots` | required | Directories searched for local clones of the repos named in Repo Lines. `~` expands. |
-| `claude` | none | Default Claude Profile for this profile; `--claude` overrides. |
+| `harness` | none | Default Harness Profile for this profile; `--harness` overrides. |
+
+Each Harness Profile (an agent CLI Card Sessions run on) has:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `kind` | `"claude"` | `claude` (print mode, stream-json, the tool policy), `codex` (`codex exec`, worktree sandbox with network), or `custom` (bring your own args). |
+| `command` | the kind's name | Executable to spawn (`~` expands) - e.g. a wrapper like `wcodex`. Required for `custom`. Shell aliases/functions do not work; the command must be an executable on PATH. |
+| `env` | none | Layered over the Runner's environment (e.g. `CLAUDE_CONFIG_DIR`; `~` expands). |
+| `model` | the CLI's default | Model for Card Sessions (e.g. `claude-opus-5`); `--model` overrides per run. |
+| `args` | the kind's shape | Argument template, `{prompt}` replaced by the session prompt. How `custom` kinds (e.g. grok) are driven; on claude/codex it replaces the built-in shape. |
+
+The claude tool allow/deny policy has no equivalent on other kinds - there (as in depth on claude) the per-worktree pre-push hook is the guard. On a Linear profile, only claude-kind sessions can comment on their Card (the MCP tool); other kinds simply skip commenting.
 
 ## Writing a runnable Card
 
