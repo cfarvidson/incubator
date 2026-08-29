@@ -18,8 +18,8 @@ export interface Config {
 
 const CONFIG_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "incubator.config.json");
 
-export function loadConfig(): Config {
-  const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as Partial<Config>;
+export function loadConfig(path: string = CONFIG_PATH): Config {
+  const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<Config>;
   const stopTime = raw.stopTime ?? "07:00";
   // A malformed Stop Time would otherwise silently never fire (Invalid Date compares false).
   if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(stopTime)) {

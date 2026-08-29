@@ -11,22 +11,26 @@ export function nightDateStamp(now: Date): string {
   return now.toLocaleDateString("sv-SE");
 }
 
-/** The Run Log port: timestamped lines appended to nights/<date>.log as the night happens. */
-export function makeRunLog(nightDate: string): RunLogPort {
+/** The Run Log port: timestamped lines appended to <nightsDir>/<date>.log as the night happens. */
+export function makeRunLog(nightDate: string, nightsDir: string = NIGHTS_DIR): RunLogPort {
   return {
     log(message: string): void {
-      mkdirSync(NIGHTS_DIR, { recursive: true });
-      appendFileSync(join(NIGHTS_DIR, `${nightDate}.log`), `[${new Date().toLocaleString("sv-SE")}] ${message}\n`);
+      mkdirSync(nightsDir, { recursive: true });
+      appendFileSync(join(nightsDir, `${nightDate}.log`), `[${new Date().toLocaleString("sv-SE")}] ${message}\n`);
     },
   };
 }
 
-/** The Morning Report sink: nights/<date>.md, rewritten whole after every Card outcome. */
-export function makeMorningReportWriter(nightDate: string, claudeProfile: string): MorningReportPort {
+/** The Morning Report sink: <nightsDir>/<date>.md, rewritten whole after every Card outcome. */
+export function makeMorningReportWriter(
+  nightDate: string,
+  claudeProfile: string,
+  nightsDir: string = NIGHTS_DIR,
+): MorningReportPort {
   return {
     async write(report: MorningReport): Promise<void> {
-      mkdirSync(NIGHTS_DIR, { recursive: true });
-      writeFileSync(join(NIGHTS_DIR, `${nightDate}.md`), renderMorningReport(nightDate, claudeProfile, report));
+      mkdirSync(nightsDir, { recursive: true });
+      writeFileSync(join(nightsDir, `${nightDate}.md`), renderMorningReport(nightDate, claudeProfile, report));
     },
   };
 }
