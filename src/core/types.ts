@@ -66,6 +66,8 @@ export type CardSessionResult =
   | { kind: "success"; prUrls: string[] }
   | { kind: "failure"; reason: string }
   | { kind: "timeout"; reason: string }
+  /** Ctrl+C during the session, as a value: core Bounces the Card, the Morning Report lands, cli.ts exits 130. */
+  | { kind: "interrupted" }
   /** Rate limiting is a value on this seam, never an exception; core retries with Backoff until the Stop Time. */
   | { kind: "rate-limited" };
 
@@ -91,6 +93,8 @@ export interface MorningReport {
   notStarted: Card[];
   /** Set when the night crashed mid-queue; the report still lands with the outcomes so far. */
   crashReason?: string;
+  /** Set when Ctrl+C stopped the night mid-session; cli.ts exits 130 after the report lands. */
+  interrupted?: boolean;
 }
 
 export interface ClockPort {

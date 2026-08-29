@@ -462,6 +462,34 @@ describe("runNight", () => {
     expect(reports.at(-1)).toEqual(report);
   });
 
+  it("bounces the in-flight Card on interruption, lands the report, and starts no further Card", async () => {
+    const { deps, events, reports, logLines } = harness(
+      [card({ identifier: "CFA-110", priority: 1 }), card({ identifier: "CFA-111", priority: 2 })],
+      { sessionResult: () => ({ kind: "interrupted" }) },
+    );
+    const report = await runNight(deps, { stopTime: "07:00" });
+
+    expect(events).toEqual([
+      "claim CFA-110",
+      "execute CFA-110",
+      "bounce CFA-110: interrupted by user during Night Run",
+    ]);
+    expect(report?.interrupted).toBe(true);
+    expect(report?.bounced).toEqual([
+      {
+        card: expect.objectContaining({ identifier: "CFA-110" }),
+        reason: "interrupted by user during Night Run",
+        durationMs: 0,
+        timedOut: false,
+      },
+    ]);
+    // The Morning Report landed, with the interruption in it.
+    expect(reports.at(-1)).toEqual(report);
+    expect(logLines.at(-1)).toBe(
+      "Night Run interrupted by user: 0 done, 1 Bounced, 0 not started; Morning Report written",
+    );
+  });
+
   it("writes the Morning Report incrementally: after Plan-time Bounces and after every Card outcome", async () => {
     const { deps, reports } = harness([
       card({ identifier: "CFA-100", priority: 1 }),

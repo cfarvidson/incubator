@@ -115,6 +115,16 @@ async function workTheQueue(
     const startedAt = deps.clock.now();
     const result = await executeWithinStopTime(deps, runnable, deadline, onWait);
     const durationMs = deps.clock.now().getTime() - startedAt.getTime();
+    if (result.kind === "interrupted") {
+      // Ctrl+C: Bounce the in-flight Card and land the report before cli.ts exits 130.
+      const reason = "interrupted by user during Night Run";
+      await retry(() => deps.linear.bounce(card, reason));
+      report.bounced.push({ card, reason, durationMs, timedOut: false });
+      report.interrupted = true;
+      deps.runLog.log(`${card.identifier} interrupted after ${formatDuration(durationMs)}; Bounced: ${reason}`);
+      await deps.morningReport.write(report);
+      break;
+    }
     if (result.kind === "success") {
       await retry(() => deps.linear.markInReview(card, result.prUrls));
       report.ran.push({ card, prUrls: result.prUrls, durationMs });
@@ -129,7 +139,8 @@ async function workTheQueue(
     await deps.morningReport.write(report);
   }
 
+  const ending = report.interrupted ? "Night Run interrupted by user" : "Night Run finished";
   deps.runLog.log(
-    `Night Run finished: ${report.ran.length} done, ${report.bounced.length} Bounced, ${report.notStarted.length} not started; Morning Report written`,
+    `${ending}: ${report.ran.length} done, ${report.bounced.length} Bounced, ${report.notStarted.length} not started; Morning Report written`,
   );
 }

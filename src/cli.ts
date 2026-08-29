@@ -6,6 +6,7 @@ import { makeLinearPort } from "./adapters/linear.js";
 import { makeMorningReportWriter, makeRunLog, nightDateStamp } from "./adapters/report.js";
 import { resolveClaudeProfile } from "./claude-profile.js";
 import { loadConfig } from "./config.js";
+import { durationCapFromMinutes } from "./core/duration-cap.js";
 import { planNight } from "./core/plan.js";
 import { withRateLimitRetry } from "./core/rate-limit.js";
 import { renderAborted, renderDryRunSummary, renderFinishSummary, renderPlan } from "./core/report.js";
@@ -58,7 +59,7 @@ async function main() {
       linear,
       resolveClone,
       executor: makeCardExecutor({
-        durationCapMs: config.durationCapMinutes * 60_000,
+        durationCap: durationCapFromMinutes(config.durationCapMinutes),
         model: config.model,
         profile,
         log: (message) => runLog.log(message),
@@ -80,6 +81,9 @@ async function main() {
   }
 
   console.log(renderFinishSummary(report).join("\n"));
+  // Ctrl+C ends the night with the conventional SIGINT exit code, but only
+  // here, after the Bounce and the Morning Report have landed.
+  if (report.interrupted) process.exit(130);
 }
 
 main().catch((error) => {
