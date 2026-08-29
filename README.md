@@ -92,10 +92,10 @@ Per-tracker Card conventions for agent sessions live in `docs/agents/trackers/`.
 
 ```
 src/core/       Pure logic: planning, the run loop, rate-limit backoff, report rendering
-src/adapters/   The messy edges: Linear API, clone resolution, Claude sessions, file writing
+src/adapters/   The messy edges: Linear and GitHub APIs, clone resolution, Claude sessions, file writing
 src/cli.ts      Entry point wiring the two together
 nights/         Morning Reports and Run Logs, one pair per night
 .claude/skills/ Repo skills for Claude Code sessions (/groom)
 ```
 
-Core code talks to the world only through ports (`LinearPort`, `CardExecutorPort`, `ClockPort`, ...), which is what makes the run loop testable without a real Linear workspace or a real Claude session.
+Core code talks to the world only through ports (`TrackerPort`, `CardExecutorPort`, `ClockPort`, ...), which is what makes the run loop testable without a real tracker or a real Claude session.

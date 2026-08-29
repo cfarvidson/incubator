@@ -4,7 +4,7 @@ export interface Card {
   title: string;
   /** The Brief: the Card's full body (the issue description). */
   brief: string;
-  /** Urgency on Linear's scale: 0 = none, 1 = urgent, 2 = high, 3 = medium, 4 = low. Other trackers map onto it. */
+  /** Urgency: 0 = none (sorts last), 1 = urgent, 2 = high, 3 = medium, 4 = low. */
   priority: number;
   url: string;
   /** The git branch name for the Card's work; the tracker adapter supplies or generates it. */
@@ -17,7 +17,9 @@ export interface Card {
 
 /** One issue tracker serving Cards (per ADR-0003 the active Tracker Profile picks which). */
 export interface TrackerPort {
-  /** The Night Queue per ADR-0002: open, assigned to me, labelled `ready-for-agent`, not yet Claimed. */
+  /** Fails on dead credentials; called once at startup so a broken token is found at 18:00, not at 03:00. */
+  checkAuth(): Promise<void>;
+  /** The Night Queue per ADR-0003: open, assigned to me, labelled `ready-for-agent`, not yet Claimed. */
   fetchNightQueue(): Promise<Card[]>;
   /** Stranded Cards: Claimed by a Night Run that never finished, still marked in progress. */
   fetchStranded(): Promise<Card[]>;

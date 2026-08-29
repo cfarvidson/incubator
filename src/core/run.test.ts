@@ -43,6 +43,7 @@ function harness(cards: Card[], { sessionResult, confirm, now, fetchNightQueue, 
       },
     },
     tracker: {
+      checkAuth: async () => {},
       fetchNightQueue: fetchNightQueue ?? (async () => cards),
       fetchStranded: async () => stranded ?? [],
       claim: async (c) => {

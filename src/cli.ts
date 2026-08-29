@@ -2,12 +2,11 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { makeCloneResolver } from "./adapters/clone-resolver.js";
 import { makeCardExecutor } from "./adapters/executor.js";
-import { githubSessionHints, makeGithubPort } from "./adapters/github.js";
 import { makeInterruptionWatcher } from "./adapters/interruption.js";
-import { linearSessionHints, makeLinearPort } from "./adapters/linear.js";
 import { makeMorningReportWriter, makeRunLog, nightDateStamp } from "./adapters/report.js";
+import { makeTracker } from "./adapters/tracker.js";
 import { resolveClaudeProfile } from "./claude-profile.js";
-import { loadConfig, resolveTrackerProfile, type TrackerConfig } from "./config.js";
+import { loadConfig, resolveTrackerProfile } from "./config.js";
 import { durationCapFromMinutes } from "./core/duration-cap.js";
 import { planNight } from "./core/plan.js";
 import { withRateLimitRetry } from "./core/rate-limit.js";
@@ -29,13 +28,6 @@ async function askToStart(): Promise<boolean> {
   const answer = await rl.question("\nStart the Night Run? [y/N] ");
   rl.close();
   return /^y(es)?$/i.test(answer.trim());
-}
-
-/** The active Tracker Profile picks the tracker adapter and the session hints that go with it. */
-function makeTracker(trackerConfig: TrackerConfig) {
-  return trackerConfig.kind === "github"
-    ? { tracker: makeGithubPort(trackerConfig.scope), sessionHints: githubSessionHints }
-    : { tracker: makeLinearPort(), sessionHints: linearSessionHints };
 }
 
 async function main() {

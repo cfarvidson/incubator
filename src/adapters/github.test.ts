@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { card } from "../core/test-fixtures.js";
 import { RateLimitError } from "../core/rate-limit.js";
 import { CLAIM_COMMENT } from "./claim-marker.js";
-import { branchNameFor, makeGithubPort, priorityFromLabels, scopeFlags, type GhRunner } from "./github.js";
+import { branchNameFor, makeGithubPort, priorityFromLabels, type GhRunner } from "./github.js";
 
 const ISSUE = {
   title: "Fix the thing",
@@ -25,17 +25,6 @@ function fakeGh(responses: Record<string, string | ((args: string[]) => string)>
   };
   return { gh, calls };
 }
-
-describe("scopeFlags", () => {
-  it("maps owners to --owner and owner/name entries to --repo", () => {
-    expect(scopeFlags(["cfarvidson", "cfarvidson/sapling"])).toEqual([
-      "--owner",
-      "cfarvidson",
-      "--repo",
-      "cfarvidson/sapling",
-    ]);
-  });
-});
 
 describe("priorityFromLabels", () => {
   it("maps priority:* labels onto Linear's scale, most urgent winning, none for unlabeled", () => {
@@ -84,6 +73,28 @@ describe("makeGithubPort", () => {
         homeRepo: "cfarvidson/example",
       },
     ]);
+  });
+
+  it("searches each scope entry with its own query and unions the results (GitHub ANDs qualifiers)", async () => {
+    const elsewhere = {
+      ...ISSUE,
+      number: 3,
+      url: "https://github.com/other/tool/issues/3",
+      repository: { nameWithOwner: "other/tool" },
+    };
+    const { gh, calls } = fakeGh({
+      "search issues": (args) => JSON.stringify(args.includes("--owner") ? [ISSUE] : [ISSUE, elsewhere]),
+      "label list": JSON.stringify([{ name: "needs-info" }]),
+    });
+    const cards = await makeGithubPort(["cfarvidson", "other/tool"], gh).fetchNightQueue();
+
+    const searches = calls.filter((c) => c[0] === "search");
+    expect(searches).toHaveLength(2);
+    expect(searches[0]).toEqual(expect.arrayContaining(["--owner", "cfarvidson"]));
+    expect(searches[1]).toEqual(expect.arrayContaining(["--repo", "other/tool"]));
+    expect(searches[0]).not.toEqual(expect.arrayContaining(["--repo"]));
+    // The overlapping issue appears once; the union carries both repos' Cards.
+    expect(cards.map((c) => c.identifier).sort()).toEqual(["cfarvidson/example#7", "other/tool#3"]);
   });
 
   it("marks a Card from a repo without a needs-info label as unable to Bounce", async () => {

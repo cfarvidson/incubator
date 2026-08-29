@@ -31,9 +31,9 @@ const runGh: GhRunner = async (args) => {
   }
 };
 
-/** Scope entries name GitHub owners (`cfarvidson`) or single repos (`owner/name`); ADR-0003. */
-export function scopeFlags(scope: string[]): string[] {
-  return scope.flatMap((entry) => (entry.includes("/") ? ["--repo", entry] : ["--owner", entry]));
+/** A scope entry names a GitHub owner (`cfarvidson`) or a single repo (`owner/name`); ADR-0003. */
+function scopeFlag(entry: string): string[] {
+  return entry.includes("/") ? ["--repo", entry] : ["--owner", entry];
 }
 
 /** GitHub has no priority field; `priority:*` labels map onto Linear's scale, the most urgent winning. */
@@ -73,7 +73,7 @@ interface SearchNode {
 
 const SEARCH_JSON = "title,body,url,number,labels,repository";
 
-export function makeGithubPort(scope: string[], gh: GhRunner = runGh): TrackerPort & { checkAuth(): Promise<void> } {
+export function makeGithubPort(scope: string[], gh: GhRunner = runGh): TrackerPort {
   // The onboarding check behind Card.canBounce, cached per repo for the run.
   const needsInfoByRepo = new Map<string, Promise<boolean>>();
   const ensuredLabels = new Set<string>();
@@ -103,24 +103,35 @@ export function makeGithubPort(scope: string[], gh: GhRunner = runGh): TrackerPo
   }
 
   async function search(extraTerms: string[]): Promise<SearchNode[]> {
-    const out = await gh([
-      "search",
-      "issues",
-      "--assignee",
-      "@me",
-      "--state",
-      "open",
-      "--label",
-      "ready-for-agent",
-      "--limit",
-      "100",
-      "--json",
-      SEARCH_JSON,
-      ...scopeFlags(scope),
-      "--",
-      ...extraTerms,
-    ]);
-    return JSON.parse(out) as SearchNode[];
+    // GitHub ANDs search qualifiers, so it is one query per scope entry, unioned by URL:
+    // a single query naming two owners (or an owner plus a foreign repo) would return
+    // their intersection - an empty Night Queue.
+    const byUrl = new Map<string, SearchNode>();
+    for (const entry of scope) {
+      const out = await gh([
+        "search",
+        "issues",
+        "--assignee",
+        "@me",
+        "--state",
+        "open",
+        "--label",
+        "ready-for-agent",
+        "--limit",
+        "100",
+        "--json",
+        SEARCH_JSON,
+        ...scopeFlag(entry),
+        "--",
+        ...extraTerms,
+      ]);
+      const nodes = JSON.parse(out) as SearchNode[];
+      if (nodes.length === 100) {
+        console.error(`Warning: 100+ Cards match in ${entry}; only the first 100 are seen.`);
+      }
+      for (const node of nodes) byUrl.set(node.url, node);
+    }
+    return [...byUrl.values()];
   }
 
   function toCards(nodes: SearchNode[]): Promise<Card[]> {
@@ -139,7 +150,8 @@ export function makeGithubPort(scope: string[], gh: GhRunner = runGh): TrackerPo
   }
 
   function repoOf(card: Card): string {
-    return card.homeRepo ?? card.identifier.split("#")[0]!;
+    if (!card.homeRepo) throw new Error(`${card.identifier} has no Home Repo; it was not served by the GitHub adapter`);
+    return card.homeRepo;
   }
 
   return {
@@ -161,11 +173,7 @@ export function makeGithubPort(scope: string[], gh: GhRunner = runGh): TrackerPo
 
     async fetchNightQueue(): Promise<Card[]> {
       // GitHub has no workflow states; the `in-progress` label is the Claim marker, so queued = not yet Claimed.
-      const nodes = await search(["-label:in-progress"]);
-      if (nodes.length === 100) {
-        console.error("Warning: the Night Queue has 100+ Cards; the Plan only covers the first 100.");
-      }
-      return toCards(nodes);
+      return toCards(await search(["-label:in-progress"]));
     },
 
     async fetchStranded(): Promise<Card[]> {

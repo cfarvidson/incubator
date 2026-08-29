@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ClaudeProfileConfig } from "./claude-profile.js";
+import { flagValue } from "./flags.js";
 
 /** Which tracker a Tracker Profile serves Cards from, plus what that tracker needs to find them. */
 export type TrackerConfig =
@@ -98,10 +99,8 @@ function loadProfile(name: string, raw: RawProfile): TrackerProfile {
 export function resolveTrackerProfile(argv: string[], config: Config): TrackerProfile {
   const names = Object.keys(config.profiles);
   const listing = `Configured profiles: ${names.map((n) => `"${n}"`).join(", ")}`;
-  const flagIndex = argv.indexOf("--profile");
-  if (flagIndex !== -1) {
-    const name = argv[flagIndex + 1];
-    if (!name || name.startsWith("-")) throw new Error(`--profile requires a profile name. ${listing}`);
+  const name = flagValue(argv, "--profile", listing);
+  if (name) {
     const profile = config.profiles[name];
     if (!profile) throw new Error(`Unknown profile "${name}". ${listing}`);
     return profile;

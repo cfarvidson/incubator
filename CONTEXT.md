@@ -17,7 +17,10 @@ The fully specified body of a Card: a goal section (which carries the scope), ve
 _Avoid_: spec, description
 
 **Repo Line**:
-The `Repo:` row at the top of a Brief naming the target repository the Card is built in. On GitHub it may be omitted; the Card then targets the repo it lives in.
+The `Repo:` row at the top of a Brief naming the target repository the Card is built in. On GitHub it may be omitted; the Card then targets its Home Repo.
+
+**Home Repo**:
+The repository a GitHub Card itself lives in. A Brief without a Repo Line targets its Home Repo; an explicit Repo Line outranks it. Unrelated to the `home` profile name.
 
 **Night Queue**:
 The Cards eligible to run tonight: open, assigned to me, label `ready-for-agent`, not yet Claimed - anywhere the active Tracker Profile reaches (the Linear work workspace, or the GitHub scope).

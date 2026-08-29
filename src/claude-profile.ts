@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { flagValue } from "./flags.js";
 
 /** A Claude Profile as written in incubator.config.json under `claudes`. */
 export interface ClaudeProfileConfig {
@@ -32,8 +33,7 @@ export function resolveClaudeProfile(
   claudes: Record<string, ClaudeProfileConfig>,
   options: { required: boolean; defaultName?: string | null },
 ): ClaudeProfile | null {
-  const flagIndex = argv.indexOf("--claude");
-  if (flagIndex === -1 && !options.defaultName && !options.required) return null;
+  if (!argv.includes("--claude") && !options.defaultName && !options.required) return null;
 
   const names = Object.keys(claudes);
   if (names.length === 0) {
@@ -41,15 +41,9 @@ export function resolveClaudeProfile(
   }
   const listing = `Configured Claude Profiles: ${names.map((n) => `"${n}"`).join(", ")}`;
 
-  let name: string | undefined;
-  if (flagIndex === -1) {
-    name = options.defaultName ?? undefined;
-    if (!name) throw new Error(`A Night Run requires --claude <name> (or a "claude" default on the profile). ${listing}`);
-  } else {
-    name = argv[flagIndex + 1];
-    if (!name || name.startsWith("-")) {
-      throw new Error(`--claude requires a profile name. ${listing}`);
-    }
+  const name = flagValue(argv, "--claude", listing) ?? options.defaultName;
+  if (!name) {
+    throw new Error(`A Night Run requires --claude <name> (or a "claude" default on the profile). ${listing}`);
   }
   const config = claudes[name];
   if (!config) {

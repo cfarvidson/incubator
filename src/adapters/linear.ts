@@ -9,14 +9,14 @@ export const linearSessionHints: TrackerSessionHints = {
   howToComment: () => "via the linear-work save_comment tool",
 };
 
-/** The Night Queue filter per ADR-0002: assigned to me + Todo + label `ready-for-agent`, any team. */
+/** The Night Queue filter per ADR-0002/0003: assigned to me + Todo + label `ready-for-agent`, any team. */
 export const NIGHT_QUEUE_FILTER = {
   assignee: { isMe: { eq: true } },
   state: { name: { eq: "Todo" } },
   labels: { name: { eq: "ready-for-agent" } },
 };
 
-/** Stranded detection per ADR-0002's one-queue promise: In Progress + `ready-for-agent` + mine. */
+/** Stranded detection per ADR-0002/0003's one-queue promise: In Progress + `ready-for-agent` + mine. */
 export const STRANDED_FILTER = {
   assignee: { isMe: { eq: true } },
   state: { name: { eq: "In Progress" } },
@@ -159,7 +159,7 @@ const COMMENT_MUTATION = `
   }
 `;
 
-export function makeLinearPort(): TrackerPort & { checkAuth(): Promise<void> } {
+export function makeLinearPort(): TrackerPort {
   const apiKey = process.env["LINEAR_API_KEY"];
   if (!apiKey) {
     throw new Error(

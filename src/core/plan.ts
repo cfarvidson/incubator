@@ -6,14 +6,14 @@ export const PRIORITY_NAMES: Record<number, string> = { 0: "none", 1: "urgent", 
 
 const NOT_ONBOARDED = "Not onboarded: no `needs-info` label exists where this Card lives, so a Bounce cannot land";
 
+/** Sort rank for a Card's priority: 0 means "no priority", which sorts after low (4). */
+const priorityRank = (priority: number): number => (priority === 0 ? 5 : priority);
+
 /** Builds tonight's Plan: dry-run only, no side effects (CFA-167). */
 export async function planNight(deps: PlanDeps): Promise<Plan> {
   const queue = await deps.tracker.fetchNightQueue();
   const stranded = await deps.tracker.fetchStranded();
-  // Priority 0 means "no priority", which sorts after low (4).
-  const sorted = [...queue].sort(
-    (a, b) => (a.priority === 0 ? 5 : a.priority) - (b.priority === 0 ? 5 : b.priority),
-  );
+  const sorted = [...queue].sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority));
   const plan: Plan = { runnable: [], bounced: [], excluded: [] };
   for (const card of stranded) {
     // A Stranded Card was once runnable, so it is onboarded - but the guard stays cheap.
