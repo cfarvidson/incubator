@@ -41,7 +41,10 @@ _Avoid_: triage, refine
 A Card deliberately left out of grooming: not runnable tonight by the user's choice, untouched, with a noted reason.
 
 **Claim**:
-Moving a Card from Todo to In Progress when the Runner picks it up, so no other run takes it.
+Moving a Card from Todo to In Progress when the Runner picks it up, so no other run takes it. The Claim leaves a marker comment so a dead run's Cards can be recognized as Stranded.
+
+**Stranded**:
+A Card Claimed by a Night Run that never finished: still In Progress, with the Claim as its latest Night Run comment. The next run's Plan Bounces Stranded Cards back for grooming.
 
 **Bounce**:
 Returning a Card to Todo with the `needs-info` label and an explanatory comment instead of (or after failing at) running it.

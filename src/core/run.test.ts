@@ -9,9 +9,10 @@ interface HarnessOptions {
   confirm?: (plan: Plan) => Promise<boolean>;
   now?: () => Date;
   fetchNightQueue?: () => Promise<Card[]>;
+  stranded?: Card[];
 }
 
-function harness(cards: Card[], { sessionResult, confirm, now, fetchNightQueue }: HarnessOptions = {}) {
+function harness(cards: Card[], { sessionResult, confirm, now, fetchNightQueue, stranded }: HarnessOptions = {}) {
   const events: string[] = [];
   const reports: MorningReport[] = [];
   const logLines: string[] = [];
@@ -25,6 +26,7 @@ function harness(cards: Card[], { sessionResult, confirm, now, fetchNightQueue }
     },
     linear: {
       fetchNightQueue: fetchNightQueue ?? (async () => cards),
+      fetchStranded: async () => stranded ?? [],
       claim: async (c) => {
         events.push(`claim ${c.identifier}`);
       },
@@ -42,12 +44,15 @@ function harness(cards: Card[], { sessionResult, confirm, now, fetchNightQueue }
         return sessionResult?.(r) ?? { kind: "success", prUrls: [`https://github.com/${r.repo}/pull/1`] };
       },
     },
-    report: {
-      write: async (report) => {
-        reports.push(report);
-      },
+    runLog: {
       log: (message) => {
         logLines.push(message);
+      },
+    },
+    morningReport: {
+      // Snapshot: runNight mutates one report object across its incremental writes.
+      write: async (report) => {
+        reports.push(structuredClone(report));
       },
     },
   };
@@ -84,7 +89,7 @@ describe("runNight", () => {
     ]);
     expect(report?.ran.map((r) => r.card.identifier)).toEqual(["CFA-61", "CFA-60"]);
     expect(report?.bounced.map((b) => b.card.identifier)).toEqual(["CFA-62"]);
-    expect(reports).toEqual([report]);
+    expect(reports.at(-1)).toEqual(report);
   });
 
   it("starts no new Card after the Stop Time; the in-flight Card finishes and the rest are reported", async () => {
@@ -111,7 +116,7 @@ describe("runNight", () => {
       "in-review CFA-70 https://github.com/cfarvidson/example/pull/1",
     ]);
     expect(report?.notStarted.map((c) => c.identifier)).toEqual(["CFA-71", "CFA-72"]);
-    expect(reports).toEqual([report]);
+    expect(reports.at(-1)).toEqual(report);
   });
 
   it("uses the same-day Stop Time when the run starts after midnight", async () => {
@@ -172,7 +177,7 @@ describe("runNight", () => {
     expect(report?.bounced).toEqual([
       { card: expect.objectContaining({ identifier: "CFA-22" }), reason: expect.stringContaining("Repo Line") },
     ]);
-    expect(reports).toEqual([report]);
+    expect(reports.at(-1)).toEqual(report);
   });
 
   it("bounces a Plan-time invalid Card in Linear before any session starts", async () => {
@@ -264,7 +269,7 @@ describe("runNight", () => {
     ]);
     expect(report?.bounced.map((b) => b.card.identifier)).toEqual(["CFA-82"]);
     expect(report?.notStarted.map((c) => c.identifier)).toEqual(["CFA-83"]);
-    expect(reports).toEqual([report]);
+    expect(reports.at(-1)).toEqual(report);
   });
 
   it("handles an empty Night Queue: no Linear writes, no sessions, the report still lands", async () => {
@@ -273,7 +278,7 @@ describe("runNight", () => {
 
     expect(events).toEqual([]);
     expect(report).toEqual({ ran: [], bounced: [], excluded: [], notStarted: [] });
-    expect(reports).toEqual([report]);
+    expect(reports.at(-1)).toEqual(report);
   });
 
   it("touches an excluded Card in no way: no claim, no bounce, no comment, no session", async () => {
@@ -297,7 +302,7 @@ describe("runNight", () => {
     expect(logLines).toContain(
       "Excluded CFA-96 (no Linear writes): Team not onboarded: it has no `needs-info` label, so a Bounce cannot land",
     );
-    expect(reports).toEqual([report]);
+    expect(reports.at(-1)).toEqual(report);
   });
 
   it("bounces a Card whose session fails, and never marks it In Review", async () => {
@@ -320,7 +325,7 @@ describe("runNight", () => {
         timedOut: false,
       },
     ]);
-    expect(reports).toEqual([report]);
+    expect(reports.at(-1)).toEqual(report);
   });
 
   it("records each Card's wall-clock duration in the report; Plan-time Bounces have none", async () => {
@@ -420,6 +425,60 @@ describe("runNight", () => {
         timedOut: true,
       },
     ]);
-    expect(reports).toEqual([report]);
+    expect(reports.at(-1)).toEqual(report);
+  });
+
+  it("writes the Morning Report incrementally: after Plan-time Bounces and after every Card outcome", async () => {
+    const { deps, reports } = harness([
+      card({ identifier: "CFA-100", priority: 1 }),
+      card({ identifier: "CFA-101", priority: 2 }),
+    ]);
+    await runNight(deps, { stopTime: "07:00" });
+
+    // Plan-time write, one per Card, and the finally-write; a hard kill loses at most the Card in flight.
+    expect(reports.map((r) => r.ran.map((entry) => entry.card.identifier))).toEqual([
+      [],
+      ["CFA-100"],
+      ["CFA-100", "CFA-101"],
+      ["CFA-100", "CFA-101"],
+    ]);
+  });
+
+  it("lands the Morning Report on a crash, with the outcomes so far and the crash reason", async () => {
+    const { deps, reports } = harness([
+      card({ identifier: "CFA-102", priority: 1 }),
+      card({ identifier: "CFA-103", priority: 2 }),
+    ]);
+    let calls = 0;
+    deps.linear.markInReview = async () => {
+      calls += 1;
+      if (calls === 2) throw new Error("Linear API error: boom");
+    };
+
+    await expect(runNight(deps, { stopTime: "07:00" })).rejects.toThrow("boom");
+    const last = reports.at(-1);
+    expect(last?.crashReason).toBe("Linear API error: boom");
+    expect(last?.ran.map((entry) => entry.card.identifier)).toEqual(["CFA-102"]);
+  });
+
+  it("bounces a Stranded Card at Plan time, before the queue is worked", async () => {
+    const { deps, events, reports } = harness([card({ identifier: "CFA-104" })], {
+      stranded: [card({ identifier: "CFA-99" })],
+    });
+    const report = await runNight(deps, { stopTime: "07:00" });
+
+    expect(events).toEqual([
+      "bounce CFA-99: Stranded: Claimed by an earlier Night Run that never finished",
+      "claim CFA-104",
+      "execute CFA-104",
+      "in-review CFA-104 https://github.com/cfarvidson/example/pull/1",
+    ]);
+    expect(report?.bounced).toEqual([
+      {
+        card: expect.objectContaining({ identifier: "CFA-99" }),
+        reason: "Stranded: Claimed by an earlier Night Run that never finished",
+      },
+    ]);
+    expect(reports.at(-1)).toEqual(report);
   });
 });

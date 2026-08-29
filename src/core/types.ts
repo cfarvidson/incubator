@@ -16,7 +16,9 @@ export interface Card {
 export interface LinearPort {
   /** The Night Queue per ADR-0002: assigned to me + Todo + label `ready-for-agent`, any team. */
   fetchNightQueue(): Promise<Card[]>;
-  /** Claim: move the Card from Todo to In Progress so no other run takes it. */
+  /** Stranded Cards: Claimed by a Night Run that never finished, still In Progress. */
+  fetchStranded(): Promise<Card[]>;
+  /** Claim: move the Card from Todo to In Progress so no other run takes it; leaves a Claim comment. */
   claim(card: Card): Promise<void>;
   /** Move the Card to In Review (never Done) with a comment linking its PRs. */
   markInReview(card: Card, prUrls: string[]): Promise<void>;
@@ -28,7 +30,7 @@ export interface LinearPort {
 export type ResolveClone = (repo: string) => string | null;
 
 export interface PlanDeps {
-  linear: Pick<LinearPort, "fetchNightQueue">;
+  linear: Pick<LinearPort, "fetchNightQueue" | "fetchStranded">;
   resolveClone: ResolveClone;
 }
 
@@ -85,6 +87,8 @@ export interface MorningReport {
   excluded: ExcludedCard[];
   /** Runnable Cards never started because the Stop Time was reached; they stay in the Night Queue. */
   notStarted: Card[];
+  /** Set when the night crashed mid-queue; the report still lands with the outcomes so far. */
+  crashReason?: string;
 }
 
 export interface ClockPort {
@@ -92,16 +96,21 @@ export interface ClockPort {
   sleep(ms: number): Promise<void>;
 }
 
-export interface ReportPort {
-  write(report: MorningReport): Promise<void>;
+export interface RunLogPort {
   /** One run-log line; the adapter stamps it with the wall-clock time. */
   log(message: string): void;
+}
+
+export interface MorningReportPort {
+  /** Idempotent whole-report write; called after every Card outcome so a dead run still leaves a report. */
+  write(report: MorningReport): Promise<void>;
 }
 
 export interface RunDeps extends PlanDeps {
   linear: LinearPort;
   executor: CardExecutorPort;
-  report: ReportPort;
+  runLog: RunLogPort;
+  morningReport: MorningReportPort;
   clock: ClockPort;
   /** The one chance to abort after seeing the Plan: false runs nothing (CFA-170). */
   confirm(plan: Plan): Promise<boolean>;

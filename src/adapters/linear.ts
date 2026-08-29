@@ -8,6 +8,26 @@ export const NIGHT_QUEUE_FILTER = {
   labels: { name: { eq: "ready-for-agent" } },
 };
 
+/** Stranded detection per ADR-0002's one-queue promise: In Progress + `ready-for-agent` + mine. */
+export const STRANDED_FILTER = {
+  assignee: { isMe: { eq: true } },
+  state: { name: { eq: "In Progress" } },
+  labels: { name: { eq: "ready-for-agent" } },
+};
+
+/** The Claim marker; every terminal outcome comment starts with "Night Run result:" instead. */
+export const CLAIM_COMMENT =
+  "Night Run: Claimed. If no `Night Run result:` comment follows, the run died and this Card is Stranded.";
+
+/**
+ * A Card is Stranded when its latest Night Run comment (chronological order) is a Claim
+ * with no terminal result after it: the run died between Claim and outcome.
+ */
+export function isStranded(commentBodiesOldestFirst: string[]): boolean {
+  const lastNightRunComment = [...commentBodiesOldestFirst].reverse().find((body) => body.startsWith("Night Run"));
+  return lastNightRunComment?.startsWith("Night Run: Claimed.") ?? false;
+}
+
 interface Label {
   id: string;
   name: string;
@@ -36,6 +56,34 @@ const QUEUE_QUERY = `
         priority
         url
         branchName
+        team {
+          labels(filter: { name: { eq: "needs-info" } }) {
+            nodes {
+              id
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+const STRANDED_QUERY = `
+  query StrandedCards($filter: IssueFilter) {
+    issues(first: 50, filter: $filter) {
+      nodes {
+        identifier
+        title
+        description
+        priority
+        url
+        branchName
+        comments {
+          nodes {
+            body
+            createdAt
+          }
+        }
         team {
           labels(filter: { name: { eq: "needs-info" } }) {
             nodes {
@@ -204,8 +252,40 @@ export function makeLinearPort(): LinearPort & { checkAuth(): Promise<void> } {
       }));
     },
 
+    async fetchStranded(): Promise<Card[]> {
+      const data = await gql<{
+        issues: {
+          nodes: {
+            identifier: string;
+            title: string;
+            description: string | null;
+            priority: number;
+            url: string;
+            branchName: string;
+            comments: { nodes: { body: string; createdAt: string }[] };
+            team: { labels: { nodes: { id: string }[] } };
+          }[];
+        };
+      }>(STRANDED_QUERY, { filter: STRANDED_FILTER });
+      return data.issues.nodes
+        .filter(({ comments }) =>
+          isStranded(
+            [...comments.nodes]
+              .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+              .map((comment) => comment.body),
+          ),
+        )
+        .map(({ description, team, comments: _comments, ...node }) => ({
+          ...node,
+          brief: description ?? "",
+          teamHasNeedsInfo: team.labels.nodes.length > 0,
+        }));
+    },
+
     async claim(card: Card): Promise<void> {
-      await moveToState(card, "In Progress");
+      const issueId = await moveToState(card, "In Progress");
+      // The marker that makes a dead run's Cards recognizable as Stranded tomorrow.
+      await gql(COMMENT_MUTATION, { issueId, body: CLAIM_COMMENT });
     },
 
     async markInReview(card: Card, prUrls: string[]): Promise<void> {

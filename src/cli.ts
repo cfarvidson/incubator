@@ -3,7 +3,7 @@ import { createInterface } from "node:readline/promises";
 import { makeCloneResolver } from "./adapters/clone-resolver.js";
 import { makeCardExecutor } from "./adapters/executor.js";
 import { makeLinearPort } from "./adapters/linear.js";
-import { makeReportWriter, nightDateStamp } from "./adapters/report.js";
+import { makeMorningReportWriter, makeRunLog, nightDateStamp } from "./adapters/report.js";
 import { resolveClaudeProfile, type ClaudeProfile } from "./claude-profile.js";
 import { loadConfig } from "./config.js";
 import { planNight } from "./core/plan.js";
@@ -87,7 +87,7 @@ async function main() {
   if (!profile) throw new Error("A Night Run requires a Claude Profile"); // unreachable: required above
   preventSleep();
   const nightDate = nightDateStamp(new Date());
-  const reportWriter = makeReportWriter(nightDate, profile.name);
+  const runLog = makeRunLog(nightDate);
   const report = await runNight(
     {
       linear,
@@ -96,9 +96,10 @@ async function main() {
         durationCapMs: config.durationCapMinutes * 60_000,
         model: config.model,
         profile,
-        log: (message) => reportWriter.log(message),
+        log: (message) => runLog.log(message),
       }),
-      report: reportWriter,
+      runLog,
+      morningReport: makeMorningReportWriter(nightDate, profile.name),
       clock,
       confirm: async (plan) => {
         printPlan(plan, profile);

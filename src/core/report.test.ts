@@ -82,6 +82,28 @@ describe("renderMorningReport", () => {
     );
   });
 
+  it("leads with the crash reason when the night crashed, keeping the outcomes so far", () => {
+    const markdown = renderMorningReport("2026-01-06", "wclaude", {
+      ran: [],
+      bounced: [],
+      excluded: [],
+      notStarted: [],
+      crashReason: "Linear API error: boom",
+    });
+    expect(markdown).toBe(
+      [
+        "# Night Run 2026-01-06",
+        "",
+        "Claude Profile: wclaude",
+        "",
+        "**Night Run crashed:** Linear API error: boom",
+        "",
+        "No Cards ran.",
+        "",
+      ].join("\n"),
+    );
+  });
+
   it("says so when no Cards ran", () => {
     const markdown = renderMorningReport("2026-01-06", "dclaude", { ran: [], bounced: [], excluded: [], notStarted: [] });
     expect(markdown).toBe(

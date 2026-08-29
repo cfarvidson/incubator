@@ -3,9 +3,9 @@ import { card } from "./test-fixtures.js";
 import { planNight } from "./plan.js";
 import type { Card, PlanDeps } from "./types.js";
 
-function deps(cards: Card[], overrides: Partial<PlanDeps> = {}): PlanDeps {
+function deps(cards: Card[], overrides: Partial<PlanDeps> = {}, stranded: Card[] = []): PlanDeps {
   return {
-    linear: { fetchNightQueue: async () => cards },
+    linear: { fetchNightQueue: async () => cards, fetchStranded: async () => stranded },
     resolveClone: (repo) => `/clones/${repo.split("/")[1]}`,
     ...overrides,
   };
@@ -108,6 +108,25 @@ describe("planNight", () => {
     const plan = await planNight(deps([alt]));
     expect(plan.bounced).toEqual([]);
     expect(plan.runnable).toHaveLength(1);
+  });
+
+  it("bounces a Stranded Card, regardless of its Brief", async () => {
+    const strandedCard = card({ identifier: "CFA-99", brief: "no repo line here" });
+    const plan = await planNight(deps([], {}, [strandedCard]));
+    expect(plan.runnable).toEqual([]);
+    expect(plan.bounced).toEqual([
+      {
+        card: expect.objectContaining({ identifier: "CFA-99" }),
+        reason: "Stranded: Claimed by an earlier Night Run that never finished",
+      },
+    ]);
+  });
+
+  it("excludes a Stranded Card whose team lacks needs-info, since a Bounce could not land", async () => {
+    const strandedCard = card({ identifier: "CFA-98", teamHasNeedsInfo: false });
+    const plan = await planNight(deps([], {}, [strandedCard]));
+    expect(plan.bounced).toEqual([]);
+    expect(plan.excluded.map((e) => e.card.identifier)).toEqual(["CFA-98"]);
   });
 
   it("orders runnable Cards by Linear priority: urgent first, no-priority last", async () => {
