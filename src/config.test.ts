@@ -53,7 +53,7 @@ describe("loadConfig", () => {
     expect(config.profiles["work"]!.cloneRoots[0]).not.toContain("~");
     expect(config.profiles["work"]!.cloneRoots[0]).toMatch(/\/code$/);
     expect(config.profiles["work"]!.harness).toBe("wclaude");
-    expect(config.profiles["home"]!.tracker).toEqual({ kind: "github", scope: ["cfarvidson"] });
+    expect(config.profiles["home"]!.tracker).toEqual({ kind: "github", scope: ["cfarvidson"], assumeAssignee: false });
     expect(config.defaultProfile).toBe("work");
     expect(config.durationCapMinutes).toBe(45);
     expect(config.stopTime).toBe("06:30");
@@ -78,6 +78,23 @@ describe("loadConfig", () => {
     expect(() =>
       loadConfig(configFile({ profiles: { work: { tracker: { kind: "jira" }, cloneRoots: ["/c"] } } })),
     ).toThrowError(/tracker\.kind/);
+  });
+
+  it("loads a github tracker with assumeAssignee and rejects a non-boolean value", () => {
+    const loaded = loadConfig(
+      configFile({
+        profiles: { home: { tracker: { kind: "github", scope: ["cfarvidson"], assumeAssignee: true }, cloneRoots: ["/c"] } },
+      }),
+    );
+    expect(loaded.profiles["home"]!.tracker).toEqual({ kind: "github", scope: ["cfarvidson"], assumeAssignee: true });
+
+    expect(() =>
+      loadConfig(
+        configFile({
+          profiles: { home: { tracker: { kind: "github", scope: ["cfarvidson"], assumeAssignee: "yes" }, cloneRoots: ["/c"] } },
+        }),
+      ),
+    ).toThrowError(/assumeAssignee/);
   });
 
   it("rejects a github tracker without a scope", () => {

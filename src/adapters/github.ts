@@ -73,7 +73,13 @@ interface SearchNode {
 
 const SEARCH_JSON = "title,body,url,number,labels,repository";
 
-export function makeGithubPort(scope: string[], gh: GhRunner = runGh): TrackerPort {
+export interface GithubTrackerOptions {
+  scope: string[];
+  /** Skip the `--assignee @me` filter: in a solo repo every queued Card is mine. */
+  assumeAssignee?: boolean;
+}
+
+export function makeGithubPort({ scope, assumeAssignee = false }: GithubTrackerOptions, gh: GhRunner = runGh): TrackerPort {
   // The onboarding check behind Card.canBounce, cached per repo for the run.
   const needsInfoByRepo = new Map<string, Promise<boolean>>();
   const ensuredLabels = new Set<string>();
@@ -111,8 +117,7 @@ export function makeGithubPort(scope: string[], gh: GhRunner = runGh): TrackerPo
       const out = await gh([
         "search",
         "issues",
-        "--assignee",
-        "@me",
+        ...(assumeAssignee ? [] : ["--assignee", "@me"]),
         "--state",
         "open",
         "--label",

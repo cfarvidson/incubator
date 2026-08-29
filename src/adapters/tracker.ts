@@ -7,6 +7,6 @@ import type { TrackerSessionHints } from "./session-policy.js";
 /** The one place a tracker kind maps to its adapter and session hints; a new tracker is added here. */
 export function makeTracker(config: TrackerConfig): { tracker: TrackerPort; sessionHints: TrackerSessionHints } {
   return config.kind === "github"
-    ? { tracker: makeGithubPort(config.scope), sessionHints: githubSessionHints }
+    ? { tracker: makeGithubPort(config), sessionHints: githubSessionHints }
     : { tracker: makeLinearPort(), sessionHints: linearSessionHints };
 }

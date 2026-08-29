@@ -8,8 +8,11 @@ import { expandHome } from "./paths.js";
 /** Which tracker a Tracker Profile serves Cards from, plus what that tracker needs to find them. */
 export type TrackerConfig =
   | { kind: "linear" }
-  /** `scope`: GitHub owners (`cfarvidson`) and/or repos (`owner/name`) searched for Cards. */
-  | { kind: "github"; scope: string[] };
+  /**
+   * `scope`: GitHub owners (`cfarvidson`) and/or repos (`owner/name`) searched for Cards.
+   * `assumeAssignee`: skip the assignee filter - every queued Card in scope is mine (solo repos).
+   */
+  | { kind: "github"; scope: string[]; assumeAssignee: boolean };
 
 /** A Tracker Profile: where Cards live and how this machine runs them. Picked with --profile. */
 export interface TrackerProfile {
@@ -36,7 +39,7 @@ export interface Config {
 const CONFIG_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "incubator.config.json");
 
 interface RawProfile {
-  tracker?: { kind?: string; scope?: string[] };
+  tracker?: { kind?: string; scope?: string[]; assumeAssignee?: unknown };
   cloneRoots?: string[];
   harness?: string;
 }
@@ -84,7 +87,11 @@ function loadProfile(name: string, raw: RawProfile): TrackerProfile {
     if (!raw.tracker?.scope?.length) {
       throw new Error(`Profile "${name}": a github tracker needs a scope (owners and/or owner/name repos to search)`);
     }
-    tracker = { kind, scope: raw.tracker.scope };
+    const assumeAssignee = raw.tracker.assumeAssignee ?? false;
+    if (typeof assumeAssignee !== "boolean") {
+      throw new Error(`Profile "${name}": assumeAssignee must be true or false, got ${JSON.stringify(assumeAssignee)}`);
+    }
+    tracker = { kind, scope: raw.tracker.scope, assumeAssignee };
   } else {
     throw new Error(`Profile "${name}": tracker.kind must be "linear" or "github", got ${JSON.stringify(kind)}`);
   }

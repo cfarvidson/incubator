@@ -22,7 +22,8 @@
     "private": {
       "tracker": {
         "kind": "github",
-        "scope": ["cfarvidson/kurir-ios", "cfarvidson/kurir-server"]
+        "scope": ["cfarvidson/kurir-ios", "cfarvidson/kurir-server"],
+        "assumeAssignee": true
       },
       "cloneRoots": ["~/code"],
       "harness": "dclaude"

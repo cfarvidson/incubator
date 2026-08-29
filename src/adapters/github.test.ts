@@ -55,7 +55,7 @@ describe("makeGithubPort", () => {
       "search issues": JSON.stringify([ISSUE]),
       "label list": JSON.stringify([{ name: "needs-info" }]),
     });
-    const cards = await makeGithubPort(["cfarvidson"], gh).fetchNightQueue();
+    const cards = await makeGithubPort({ scope: ["cfarvidson"] }, gh).fetchNightQueue();
 
     const searchArgs = calls[0]!;
     expect(searchArgs).toEqual(expect.arrayContaining(["--assignee", "@me", "--label", "ready-for-agent"]));
@@ -75,6 +75,18 @@ describe("makeGithubPort", () => {
     ]);
   });
 
+  it("drops the assignee filter when the profile assumes the assignee (solo repos)", async () => {
+    const { gh, calls } = fakeGh({
+      "search issues": JSON.stringify([ISSUE]),
+      "label list": JSON.stringify([{ name: "needs-info" }]),
+    });
+    const cards = await makeGithubPort({ scope: ["cfarvidson"], assumeAssignee: true }, gh).fetchNightQueue();
+
+    expect(calls[0]).not.toEqual(expect.arrayContaining(["--assignee"]));
+    expect(calls[0]).toEqual(expect.arrayContaining(["--label", "ready-for-agent"]));
+    expect(cards.map((c) => c.identifier)).toEqual(["cfarvidson/example#7"]);
+  });
+
   it("searches each scope entry with its own query and unions the results (GitHub ANDs qualifiers)", async () => {
     const elsewhere = {
       ...ISSUE,
@@ -86,7 +98,7 @@ describe("makeGithubPort", () => {
       "search issues": (args) => JSON.stringify(args.includes("--owner") ? [ISSUE] : [ISSUE, elsewhere]),
       "label list": JSON.stringify([{ name: "needs-info" }]),
     });
-    const cards = await makeGithubPort(["cfarvidson", "other/tool"], gh).fetchNightQueue();
+    const cards = await makeGithubPort({ scope: ["cfarvidson", "other/tool"] }, gh).fetchNightQueue();
 
     const searches = calls.filter((c) => c[0] === "search");
     expect(searches).toHaveLength(2);
@@ -102,7 +114,7 @@ describe("makeGithubPort", () => {
       "search issues": JSON.stringify([ISSUE]),
       "label list": JSON.stringify([{ name: "bug" }]),
     });
-    const cards = await makeGithubPort(["cfarvidson"], gh).fetchNightQueue();
+    const cards = await makeGithubPort({ scope: ["cfarvidson"] }, gh).fetchNightQueue();
     expect(cards[0]!.canBounce).toBe(false);
   });
 
@@ -121,7 +133,7 @@ describe("makeGithubPort", () => {
               ],
             }),
     });
-    const cards = await makeGithubPort(["cfarvidson"], gh).fetchStranded();
+    const cards = await makeGithubPort({ scope: ["cfarvidson"] }, gh).fetchStranded();
 
     expect(calls[0]!.slice(-2)).toEqual(["--", "label:in-progress"]);
     expect(cards.map((c) => c.identifier)).toEqual(["cfarvidson/example#8"]);
@@ -129,7 +141,7 @@ describe("makeGithubPort", () => {
 
   it("claims a Card: in-progress label (created if missing) plus the Claim comment", async () => {
     const { gh, calls } = fakeGh({ "label create": "", "issue edit": "", "issue comment": "" });
-    await makeGithubPort(["cfarvidson"], gh).claim(card({ url: ISSUE.url, homeRepo: "cfarvidson/example" }));
+    await makeGithubPort({ scope: ["cfarvidson"] }, gh).claim(card({ url: ISSUE.url, homeRepo: "cfarvidson/example" }));
 
     expect(calls).toEqual([
       ["label", "create", "in-progress", "-R", "cfarvidson/example", "--color", "ededed"],
@@ -140,7 +152,7 @@ describe("makeGithubPort", () => {
 
   it("marks a Card in review: swaps the queue labels for in-review and links the PRs", async () => {
     const { gh, calls } = fakeGh({ "label create": "", "issue edit": "", "issue comment": "" });
-    await makeGithubPort(["cfarvidson"], gh).markInReview(card({ url: ISSUE.url, homeRepo: "cfarvidson/example" }), [
+    await makeGithubPort({ scope: ["cfarvidson"] }, gh).markInReview(card({ url: ISSUE.url, homeRepo: "cfarvidson/example" }), [
       "https://github.com/cfarvidson/example/pull/12",
     ]);
 
@@ -159,7 +171,7 @@ describe("makeGithubPort", () => {
 
   it("bounces a Card: ready-for-agent swapped for needs-info, with the reason as a comment", async () => {
     const { gh, calls } = fakeGh({ "label create": "", "issue edit": "", "issue comment": "" });
-    await makeGithubPort(["cfarvidson"], gh).bounce(card({ url: ISSUE.url, homeRepo: "cfarvidson/example" }), "no clone");
+    await makeGithubPort({ scope: ["cfarvidson"] }, gh).bounce(card({ url: ISSUE.url, homeRepo: "cfarvidson/example" }), "no clone");
 
     expect(calls.slice(1)).toEqual([
       ["issue", "edit", ISSUE.url, "--remove-label", "ready-for-agent,in-progress", "--add-label", "needs-info"],
@@ -175,7 +187,7 @@ describe("makeGithubPort", () => {
       "issue edit": "",
       "issue comment": "",
     });
-    await makeGithubPort(["cfarvidson"], gh).claim(card({ url: ISSUE.url, homeRepo: "cfarvidson/example" }));
+    await makeGithubPort({ scope: ["cfarvidson"] }, gh).claim(card({ url: ISSUE.url, homeRepo: "cfarvidson/example" }));
     expect(calls.map((c) => c.slice(0, 2).join(" "))).toEqual(["label create", "issue edit", "issue comment"]);
   });
 
@@ -183,6 +195,6 @@ describe("makeGithubPort", () => {
     const gh: GhRunner = async () => {
       throw new RateLimitError("GitHub API rate limited");
     };
-    await expect(makeGithubPort(["cfarvidson"], gh).fetchNightQueue()).rejects.toBeInstanceOf(RateLimitError);
+    await expect(makeGithubPort({ scope: ["cfarvidson"] }, gh).fetchNightQueue()).rejects.toBeInstanceOf(RateLimitError);
   });
 });

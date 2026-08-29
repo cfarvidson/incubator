@@ -7,7 +7,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe("makeTracker", () => {
   it("pairs the github adapter with the gh comment hints", () => {
-    const { tracker, sessionHints } = makeTracker({ kind: "github", scope: ["cfarvidson"] });
+    const { tracker, sessionHints } = makeTracker({ kind: "github", scope: ["cfarvidson"], assumeAssignee: false });
     expect(sessionHints).toBe(githubSessionHints);
     expect(typeof tracker.checkAuth).toBe("function");
   });

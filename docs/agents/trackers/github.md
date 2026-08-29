@@ -4,6 +4,7 @@ How Cards look when the active Tracker Profile points at GitHub. Use the `gh` CL
 
 - **A Card**: an open GitHub issue assigned to me, in a repo/owner within the profile's `scope`. The Brief is the issue body; a Brief without a Repo Line targets the issue's own repo.
 - **Night Queue**: label `ready-for-agent`, not labelled `in-progress`. `gh search issues --assignee @me --state open --label ready-for-agent -- -label:in-progress`.
+- **`assumeAssignee: true`** on the tracker config drops the `--assignee @me` filter: in a solo repo every queued Card is mine, so issues need not be assigned to enter the Night Queue.
 - **Claimed**: label `in-progress` added, with a `Night Run: Claimed.` comment.
 - **Done for the night**: labels `ready-for-agent` and `in-progress` removed, `in-review` added, comment `Night Run result: done.` with PR links.
 - **Bounced**: labels swapped to `needs-info`, comment `Night Run result: Bounced.` with the reason.
