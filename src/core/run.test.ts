@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { card } from "./test-fixtures.js";
+import { bounceReasons } from "./brief.js";
 import { RateLimitError } from "./rate-limit.js";
 import { runNight } from "./run.js";
 import type { Card, CardSessionResult, MorningReport, Plan, RunDeps, RunnableCard } from "./types.js";
@@ -172,7 +173,7 @@ describe("runNight", () => {
     const { deps, events, reports } = harness([card({ identifier: "CFA-22", brief: "no repo line here" })]);
     const report = await runNight(deps, { stopTime: "07:00" });
 
-    expect(events).toEqual(["bounce CFA-22: Brief has no Repo Line (`Repo: owner/name`)"]);
+    expect(events).toEqual([`bounce CFA-22: ${bounceReasons.noRepoLine}`]);
     expect(report?.ran).toEqual([]);
     expect(report?.bounced).toEqual([
       { card: expect.objectContaining({ identifier: "CFA-22" }), reason: expect.stringContaining("Repo Line") },
@@ -188,7 +189,7 @@ describe("runNight", () => {
     await runNight(deps, { stopTime: "07:00" });
 
     expect(events).toEqual([
-      "bounce CFA-30: Brief has no Repo Line (`Repo: owner/name`)",
+      `bounce CFA-30: ${bounceReasons.noRepoLine}`,
       "claim CFA-31",
       "execute CFA-31",
       "in-review CFA-31 https://github.com/cfarvidson/example/pull/1",
@@ -413,7 +414,7 @@ describe("runNight", () => {
 
     expect(logLines).toEqual([
       "Night Run started (Claude Profile wclaude): 1 runnable, 1 Bounced at Plan time; Stop Time 07:00",
-      "Bounced CFA-30 at Plan time: Brief has no Repo Line (`Repo: owner/name`)",
+      `Bounced CFA-30 at Plan time: ${bounceReasons.noRepoLine}`,
       "Claimed CFA-31; Card Session starting",
       "Rate limited; waiting 1m before retrying",
       "CFA-31 done in 0m: https://github.com/cfarvidson/example/pull/1",

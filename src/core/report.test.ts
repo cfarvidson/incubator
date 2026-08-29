@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { bounceReasons } from "./brief.js";
 import { formatDuration, renderMorningReport } from "./report.js";
 import { card } from "./test-fixtures.js";
 
@@ -29,7 +30,7 @@ describe("renderMorningReport", () => {
       bounced: [
         {
           card: card({ identifier: "CFA-30", title: "Underspecified" }),
-          reason: "Brief has no Repo Line (`Repo: owner/name`)",
+          reason: bounceReasons.noRepoLine,
         },
         {
           card: card({ identifier: "CFA-40", title: "Broke midway" }),
@@ -66,7 +67,7 @@ describe("renderMorningReport", () => {
         "",
         "## Bounced",
         "",
-        "- CFA-30 Underspecified - Bounced at Plan time: Brief has no Repo Line (`Repo: owner/name`)",
+        `- CFA-30 Underspecified - Bounced at Plan time: ${bounceReasons.noRepoLine}`,
         "- CFA-40 Broke midway - Bounced after 12m: Card Session for CFA-40 exited with status 1",
         "- CFA-41 Got stuck - timed out after 2h 00m: Card Session for CFA-41 hit the 2h Duration Cap and was stopped",
         "",

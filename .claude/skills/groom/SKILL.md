@@ -18,7 +18,7 @@ The user can name extra Cards; add them to the pass. If both sources come back e
 
 ## 2. Diagnose each Card
 
-The Brief contract is enforced by `src/core/plan.ts` - that file is the authority; re-read it when in doubt. A runnable Brief has:
+The Brief contract lives in `src/core/brief.ts` - that module is the authority; re-read it when in doubt. A runnable Brief has:
 
 - A Repo Line: `Repo: owner/name` on its own line - the actual git repository, not an image or service name
 - A goal heading (`What to build`, `Goal`, or `Problem`) whose section carries the scope
