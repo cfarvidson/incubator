@@ -1,6 +1,5 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { flagValue } from "./flags.js";
+import { expandHome } from "./paths.js";
 
 /** How a harness CLI is driven: claude and codex have built-in argument shapes; custom brings its own. */
 export type HarnessKind = "claude" | "codex" | "custom";
@@ -15,7 +14,7 @@ export interface HarnessConfig {
   env?: Record<string, string>;
   /** Model for Card Sessions; omitted uses the harness CLI's own default. `--model` overrides. */
   model?: string;
-  /** Argument template with "{prompt}" for the session prompt; replaces the kind's built-in shape. */
+  /** Argument template with "{prompt}" for the session prompt (and "{model}" for the model); replaces the kind's built-in shape. */
   args?: string[];
 }
 
@@ -30,11 +29,6 @@ export interface HarnessProfile {
 }
 
 const KINDS: readonly HarnessKind[] = ["claude", "codex", "custom"];
-
-/** Only `~/`-prefixed values are paths to expand; anything else (commands on PATH, tokens, URLs) stays verbatim. */
-function expandHome(value: string): string {
-  return value.startsWith("~/") ? join(homedir(), value.slice(2)) : value;
-}
 
 /**
  * Picks the Harness Profile named by `--harness <name>`, falling back to the
@@ -78,6 +72,14 @@ export function resolveHarnessProfile(
     throw new Error(`Harness Profile "${name}": kind "custom" needs args (an argument template with "{prompt}")`);
   }
   const model = flagValue(argv, "--model", "--model requires a model name (e.g. claude-opus-5)") ?? config.model ?? null;
+  // An args template owns the whole argument list, so a model can only reach it through a "{model}" slot;
+  // both halves are checked so neither a set model nor the slot is ever silently dropped.
+  if (config.args && model && !config.args.includes("{model}")) {
+    throw new Error(`Harness Profile "${name}": a model is set but args has no "{model}" slot to receive it`);
+  }
+  if (config.args && !model && config.args.includes("{model}")) {
+    throw new Error(`Harness Profile "${name}": args has a "{model}" slot but no model is set (add "model" or pass --model)`);
+  }
   return {
     name,
     kind,

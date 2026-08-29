@@ -4,14 +4,14 @@ Overnight execution of prepared work. During the day I prepare Cards in the issu
 
 Which tracker serves the Cards is picked per run by a **Tracker Profile** (ADR-0003): at work the `work` profile reads the Linear workspace, at home the `home` profile reads GitHub Issues. One run, one profile, one queue.
 
-The Runner itself is a deterministic script, not an agent. Each Card runs in its own headless Claude session, in its own git worktree of the target repo. See [CONTEXT.md](CONTEXT.md) for the full vocabulary (Card, Brief, Bounce, and so on).
+The Runner itself is a deterministic script, not an agent. Each Card runs in its own headless agent session (on the run's Harness Profile), in its own git worktree of the target repo. See [CONTEXT.md](CONTEXT.md) for the full vocabulary (Card, Brief, Bounce, and so on).
 
 ## How a night works
 
 1. `pnpm night` fetches the Night Queue from the active profile's tracker: issues assigned to me, open, label `ready-for-agent` (Linear: the whole work workspace; GitHub: the profile's owner/repo scope).
 2. It prints the Plan: which Cards will run in what order, and which get Bounced for an incomplete Brief.
 3. One yes/no Abort Prompt. Answering no touches nothing, no tracker writes, no sessions, no worktrees.
-4. For each Card: Claim it (Linear: Todo -> In Progress; GitHub: label `in-progress`), run a headless Claude session in a fresh worktree, then either mark it done with PR links or Bounce it back with `needs-info` and a comment explaining why.
+4. For each Card: Claim it (Linear: Todo -> In Progress; GitHub: label `in-progress`), run a headless agent session in a fresh worktree, then either mark it done with PR links or Bounce it back with `needs-info` and a comment explaining why.
 5. The night ends when the queue is empty or the Stop Time passes. A Morning Report and a timestamped Run Log land in `nights/`.
 
 A Card Session that exceeds the Duration Cap (default 2h) gets its whole process tree killed and the Card is Bounced. Rate limits pause the night with doubling backoff (1 to 15 minutes) rather than aborting it; after the Stop Time a rate-limited Card is Bounced instead of retried. `caffeinate` keeps the Mac awake for exactly as long as the Runner lives.
@@ -77,9 +77,9 @@ Each Harness Profile (an agent CLI Card Sessions run on) has:
 | `command` | the kind's name | Executable to spawn (`~` expands) - e.g. a wrapper like `wcodex`. Required for `custom`. Shell aliases/functions do not work; the command must be an executable on PATH. |
 | `env` | none | Layered over the Runner's environment (e.g. `CLAUDE_CONFIG_DIR`; `~` expands). |
 | `model` | the CLI's default | Model for Card Sessions (e.g. `claude-opus-5`); `--model` overrides per run. |
-| `args` | the kind's shape | Argument template, `{prompt}` replaced by the session prompt. How `custom` kinds (e.g. grok) are driven; on claude/codex it replaces the built-in shape. |
+| `args` | the kind's shape | Argument template: `{prompt}` is replaced by the session prompt, `{model}` by the model (required whenever a model is set - a template without the slot cannot receive one). How `custom` kinds (e.g. grok) are driven; on claude/codex it replaces the built-in shape. |
 
-The claude tool allow/deny policy has no equivalent on other kinds - there (as in depth on claude) the per-worktree pre-push hook is the guard. On a Linear profile, only claude-kind sessions can comment on their Card (the MCP tool); other kinds simply skip commenting.
+The claude tool allow/deny policy has no equivalent on other kinds - there (as in depth on claude) the per-worktree pre-push hook is the guard. On a Linear profile, only claude-kind sessions can comment on their Card (the MCP tool); other kinds' session prompt tells them not to comment. GitHub profiles comment via `gh` on every kind.
 
 ## Writing a runnable Card
 
@@ -104,10 +104,10 @@ Per-tracker Card conventions for agent sessions live in `docs/agents/trackers/`.
 
 ```
 src/core/       Pure logic: planning, the run loop, rate-limit backoff, report rendering
-src/adapters/   The messy edges: Linear and GitHub APIs, clone resolution, Claude sessions, file writing
+src/adapters/   The messy edges: Linear and GitHub APIs, clone resolution, agent sessions, file writing
 src/cli.ts      Entry point wiring the two together
 nights/         Morning Reports and Run Logs, one pair per night
 .claude/skills/ Repo skills for Claude Code sessions (/groom)
 ```
 
-Core code talks to the world only through ports (`TrackerPort`, `CardExecutorPort`, `ClockPort`, ...), which is what makes the run loop testable without a real tracker or a real Claude session.
+Core code talks to the world only through ports (`TrackerPort`, `CardExecutorPort`, `ClockPort`, ...), which is what makes the run loop testable without a real tracker or a real agent session.

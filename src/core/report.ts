@@ -4,8 +4,8 @@ import type { BouncedCard, MorningReport, Plan } from "./types.js";
 const NOTHING_TOUCHED = "No tracker writes, no sessions, no worktrees.";
 
 /** Renders tonight's Plan for the terminal: run order with priorities, Bounces, and exclusions. */
-export function renderPlan(plan: Plan, harness: string | null): string[] {
-  const lines = [harness ? `Tonight's Plan - Harness: ${harness}` : "Tonight's Plan", ""];
+export function renderPlan(plan: Plan, harnessName: string | null): string[] {
+  const lines = [harnessName ? `Tonight's Plan - Harness: ${harnessName}` : "Tonight's Plan", ""];
 
   if (plan.runnable.length === 0) {
     lines.push("  Nothing runnable in the Night Queue.");
@@ -83,8 +83,8 @@ function bounceOutcome(b: BouncedCard): string {
 }
 
 /** Renders the Morning Report markdown: every Card of the night with outcome, PR links, and duration. */
-export function renderMorningReport(date: string, harness: string, report: MorningReport): string {
-  const lines = [`# Night Run ${date}`, "", `Harness: ${harness}`, ""];
+export function renderMorningReport(date: string, harnessName: string, report: MorningReport): string {
+  const lines = [`# Night Run ${date}`, "", `Harness: ${harnessName}`, ""];
   if (report.crashReason) {
     lines.push(`**Night Run crashed:** ${report.crashReason}`, "");
   }

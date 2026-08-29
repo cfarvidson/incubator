@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { flagValue } from "./flags.js";
 import type { HarnessConfig } from "./harness.js";
+import { expandHome } from "./paths.js";
 
 /** Which tracker a Tracker Profile serves Cards from, plus what that tracker needs to find them. */
 export type TrackerConfig =
@@ -88,7 +88,7 @@ function loadProfile(name: string, raw: RawProfile): TrackerProfile {
   } else {
     throw new Error(`Profile "${name}": tracker.kind must be "linear" or "github", got ${JSON.stringify(kind)}`);
   }
-  return { name, tracker, cloneRoots: raw.cloneRoots.map(expandHome), harness: raw.harness ?? null };
+  return { name, tracker, cloneRoots: raw.cloneRoots.map((root) => resolve(expandHome(root))), harness: raw.harness ?? null };
 }
 
 /** Picks the Tracker Profile for this run: --profile <name>, else defaultProfile, else the sole profile. */
@@ -104,8 +104,4 @@ export function resolveTrackerProfile(argv: string[], config: Config): TrackerPr
   if (config.defaultProfile) return config.profiles[config.defaultProfile]!;
   if (names.length === 1) return config.profiles[names[0]!]!;
   throw new Error(`Multiple profiles and no defaultProfile; pick one with --profile <name>. ${listing}`);
-}
-
-function expandHome(path: string): string {
-  return resolve(path.startsWith("~/") ? join(homedir(), path.slice(2)) : path);
 }

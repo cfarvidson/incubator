@@ -24,13 +24,13 @@ export function makeRunLog(nightDate: string, nightsDir: string = NIGHTS_DIR): R
 /** The Morning Report sink: <nightsDir>/<date>.md, rewritten whole after every Card outcome. */
 export function makeMorningReportWriter(
   nightDate: string,
-  harness: string,
+  harnessName: string,
   nightsDir: string = NIGHTS_DIR,
 ): MorningReportPort {
   return {
     async write(report: MorningReport): Promise<void> {
       mkdirSync(nightsDir, { recursive: true });
-      writeFileSync(join(nightsDir, `${nightDate}.md`), renderMorningReport(nightDate, harness, report));
+      writeFileSync(join(nightsDir, `${nightDate}.md`), renderMorningReport(nightDate, harnessName, report));
     },
   };
 }

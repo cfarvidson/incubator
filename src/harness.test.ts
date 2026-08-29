@@ -74,6 +74,25 @@ describe("resolveHarnessProfile", () => {
     );
   });
 
+  it("refuses a model that an args template cannot receive, and a {model} slot with no model", () => {
+    const templated: Record<string, HarnessConfig> = {
+      grok: { kind: "custom", command: "grok", model: "grok-5", args: ["-p", "{prompt}"] },
+    };
+    expect(() => resolveHarnessProfile(["--harness", "grok"], templated, { required: true })).toThrow(
+      'no "{model}" slot',
+    );
+    const slotted: Record<string, HarnessConfig> = {
+      grok: { kind: "custom", command: "grok", args: ["-m", "{model}", "-p", "{prompt}"] },
+    };
+    expect(() => resolveHarnessProfile(["--harness", "grok"], slotted, { required: true })).toThrow(
+      "no model is set",
+    );
+    // With the slot and a model (config or --model), both resolve.
+    expect(
+      resolveHarnessProfile(["--harness", "grok", "--model", "grok-5"], slotted, { required: true })?.model,
+    ).toBe("grok-5");
+  });
+
   it("keeps a custom command and expands its ~/ prefix", () => {
     const harnesses = { wrapped: { command: "~/bin/claude-work" } };
     expect(resolveHarnessProfile(["--harness", "wrapped"], harnesses, { required: true })?.command).toBe(

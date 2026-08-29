@@ -77,7 +77,7 @@ async function main() {
       resolveClone,
       executor: makeCardExecutor({
         durationCap: durationCapFromMinutes(config.durationCapMinutes),
-        profile: harness,
+        harness,
         sessionHints,
         log: (message) => runLog.log(message),
       }),
@@ -90,7 +90,7 @@ async function main() {
         return askToStart();
       },
     },
-    { stopTime: config.stopTime, harness: harness.name },
+    { stopTime: config.stopTime, harnessName: harness.name },
   );
 
   if (!report) {

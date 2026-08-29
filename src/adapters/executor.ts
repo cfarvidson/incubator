@@ -11,7 +11,7 @@ export interface ExecutorOptions {
   /** The Duration Cap: a stuck session is stopped and its Card Bounced. */
   durationCap: DurationCap;
   /** The Harness Profile every Card Session of the night runs with (agent CLI, model, credentials). */
-  profile: HarnessProfile;
+  harness: HarnessProfile;
   /** How a Card Session may comment on its Card; supplied by the active tracker. */
   sessionHints: TrackerSessionHints;
   /** Run Log line, so an interrupted night is reconstructable in the morning. */
@@ -39,11 +39,11 @@ export function makeCardExecutor(options: ExecutorOptions): CardExecutorPort {
 
       const renderer = makeSessionRenderer();
       const session = await supervisor.run(
-        options.profile.command,
-        cardSessionPolicy.cliArgs(runnable, options.profile, options.sessionHints),
+        options.harness.command,
+        cardSessionPolicy.cliArgs(runnable, options.harness, options.sessionHints),
         {
         cwd: worktreePath,
-        env: { ...process.env, ...options.profile.env },
+        env: { ...process.env, ...options.harness.env },
         capMs: options.durationCap.ms,
         onStdout: (chunk) => renderer.feed(chunk),
         onStderr: (chunk) => process.stderr.write(chunk),

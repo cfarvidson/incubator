@@ -20,7 +20,7 @@ function harness(overrides: Partial<HarnessProfile> = {}): HarnessProfile {
 
 describe("cardSessionPolicy", () => {
   it("writes a session prompt naming the Card, the repo, the branch, and carrying the Brief", () => {
-    const prompt = cardSessionPolicy.prompt(runnable(), linearSessionHints);
+    const prompt = cardSessionPolicy.prompt(runnable(), linearSessionHints, "claude");
 
     expect(prompt).toContain("CFA-7: Fix the thing");
     expect(prompt).toContain("worktree of cfarvidson/example on branch cfa-7-fix-the-thing");
@@ -30,12 +30,22 @@ describe("cardSessionPolicy", () => {
   });
 
   it("tells the session how to comment on its Card per the active tracker", () => {
-    expect(cardSessionPolicy.prompt(runnable(), linearSessionHints)).toContain(
+    expect(cardSessionPolicy.prompt(runnable(), linearSessionHints, "claude")).toContain(
       "you may add a comment to it via the linear-work save_comment tool",
     );
-    expect(cardSessionPolicy.prompt(runnable(), githubSessionHints)).toContain(
+    expect(cardSessionPolicy.prompt(runnable(), githubSessionHints, "claude")).toContain(
       "you may add a comment to it with `gh issue comment https://linear.app/tv4/issue/CFA-1`",
     );
+  });
+
+  it("tells a non-claude session not to comment when the tracker's comment path needs a tool it lacks", () => {
+    // Linear commenting is an MCP tool that only the claude CLI carries.
+    expect(cardSessionPolicy.prompt(runnable(), linearSessionHints, "codex")).toContain(
+      "do not comment on it either",
+    );
+    expect(cardSessionPolicy.prompt(runnable(), linearSessionHints, "custom")).not.toContain("save_comment tool");
+    // GitHub commenting is plain gh, which every kind has.
+    expect(cardSessionPolicy.prompt(runnable(), githubSessionHints, "codex")).toContain("gh issue comment");
   });
 
   it("allows the tracker's comment tool on top of the base list", () => {
@@ -47,7 +57,7 @@ describe("cardSessionPolicy", () => {
   it("builds claude CLI args with the prompt, streaming output, and both tool lists", () => {
     const args = cardSessionPolicy.cliArgs(runnable(), harness(), linearSessionHints);
 
-    expect(args.slice(0, 2)).toEqual(["-p", cardSessionPolicy.prompt(runnable(), linearSessionHints)]);
+    expect(args.slice(0, 2)).toEqual(["-p", cardSessionPolicy.prompt(runnable(), linearSessionHints, "claude")]);
     expect(args).toContain("stream-json");
     expect(args).toContain("--verbose");
     expect(args[args.indexOf("--allowedTools") + 1]).toBe(cardSessionPolicy.allowedTools(linearSessionHints).join(","));
@@ -68,7 +78,7 @@ describe("cardSessionPolicy", () => {
     expect(args[0]).toBe("exec");
     expect(args).toEqual(expect.arrayContaining(["--sandbox", "workspace-write"]));
     expect(args).toEqual(expect.arrayContaining(["-c", "sandbox_workspace_write.network_access=true"]));
-    expect(args.at(-1)).toBe(cardSessionPolicy.prompt(runnable(), githubSessionHints));
+    expect(args.at(-1)).toBe(cardSessionPolicy.prompt(runnable(), githubSessionHints, "codex"));
     expect(args).not.toContain("--allowedTools");
 
     const withModel = cardSessionPolicy.cliArgs(runnable(), { ...codex, model: "gpt-5.5-codex" }, githubSessionHints);
@@ -79,13 +89,29 @@ describe("cardSessionPolicy", () => {
     const grok = harness({ name: "grok", kind: "custom", command: "grok", args: ["-p", "{prompt}"] });
     expect(cardSessionPolicy.cliArgs(runnable(), grok, githubSessionHints)).toEqual([
       "-p",
-      cardSessionPolicy.prompt(runnable(), githubSessionHints),
+      cardSessionPolicy.prompt(runnable(), githubSessionHints, "custom"),
     ]);
     // Also on claude: a template replaces the built-in argument shape entirely.
     const templated = harness({ args: ["--headless", "{prompt}"] });
     expect(cardSessionPolicy.cliArgs(runnable(), templated, linearSessionHints)).toEqual([
       "--headless",
-      cardSessionPolicy.prompt(runnable(), linearSessionHints),
+      cardSessionPolicy.prompt(runnable(), linearSessionHints, "claude"),
+    ]);
+  });
+
+  it("substitutes the model into a template's {model} slot, so --model reaches custom harnesses", () => {
+    const grok = harness({
+      name: "grok",
+      kind: "custom",
+      command: "grok",
+      model: "grok-5",
+      args: ["-m", "{model}", "-p", "{prompt}"],
+    });
+    expect(cardSessionPolicy.cliArgs(runnable(), grok, githubSessionHints)).toEqual([
+      "-m",
+      "grok-5",
+      "-p",
+      cardSessionPolicy.prompt(runnable(), githubSessionHints, "custom"),
     ]);
   });
 

@@ -429,7 +429,7 @@ describe("runNight", () => {
         },
       },
     );
-    await runNight(deps, { stopTime: "07:00", harness: "wclaude" });
+    await runNight(deps, { stopTime: "07:00", harnessName: "wclaude" });
 
     expect(logLines).toEqual([
       "Night Run started (Harness wclaude): 1 runnable, 1 Bounced at Plan time; Stop Time 07:00",
