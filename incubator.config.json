@@ -1,10 +1,22 @@
 {
-  "cloneRoots": ["~/code", "~/code/TV4"],
   "durationCapMinutes": 120,
   "stopTime": "07:00",
   "model": null,
   "claudes": {
     "dclaude": {},
     "wclaude": { "env": { "CLAUDE_CONFIG_DIR": "~/.claude-work" } }
-  }
+  },
+  "profiles": {
+    "work": {
+      "tracker": { "kind": "linear" },
+      "cloneRoots": ["~/code", "~/code/TV4"],
+      "claude": "wclaude"
+    },
+    "home": {
+      "tracker": { "kind": "github", "scope": ["cfarvidson"] },
+      "cloneRoots": ["~/code"],
+      "claude": "dclaude"
+    }
+  },
+  "defaultProfile": "work"
 }

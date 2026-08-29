@@ -15,7 +15,7 @@ function nextStopTime(start: Date, stopTime: string): Date {
 /**
  * A rate-limited session (a `rate-limited` result, never an exception) retries
  * with doubling Backoff, but only until the Stop Time; past it, the Card is
- * Bounced instead. Linear calls, by contrast, retry without a deadline - those
+ * Bounced instead. Tracker calls, by contrast, retry without a deadline - those
  * limits are short-lived and a paused write must still land.
  */
 async function executeWithinStopTime(
@@ -98,11 +98,11 @@ async function workTheQueue(
   const retry = <T>(fn: () => Promise<T>) => withRateLimitRetry(deps.clock, fn, { onWait });
 
   for (const excluded of plan.excluded) {
-    deps.runLog.log(`Excluded ${excluded.card.identifier} (no Linear writes): ${excluded.reason}`);
+    deps.runLog.log(`Excluded ${excluded.card.identifier} (no tracker writes): ${excluded.reason}`);
   }
 
   for (const bounced of plan.bounced) {
-    await retry(() => deps.linear.bounce(bounced.card, bounced.reason));
+    await retry(() => deps.tracker.bounce(bounced.card, bounced.reason));
     deps.runLog.log(`Bounced ${bounced.card.identifier} at Plan time: ${bounced.reason}`);
   }
   // First incremental write: even a run dying on its first Card Session leaves the Plan-time outcomes.
@@ -113,7 +113,7 @@ async function workTheQueue(
     const { card } = runnable;
     if (deps.interruption.interrupted()) {
       // Ctrl+C between Cards: nothing here was Claimed, so no Bounce - the
-      // rest of the queue stays in Linear untouched and is reported as not started.
+      // rest of the queue stays in the tracker untouched and is reported as not started.
       windDownInterrupted(deps, plan, report, index);
       await deps.morningReport.write(report);
       break;
@@ -124,7 +124,7 @@ async function workTheQueue(
       await deps.morningReport.write(report);
       continue;
     }
-    await retry(() => deps.linear.claim(card));
+    await retry(() => deps.tracker.claim(card));
     deps.runLog.log(`Claimed ${card.identifier}; Card Session starting`);
     const startedAt = deps.clock.now();
     const result = await executeWithinStopTime(deps, runnable, deadline, onWait);
@@ -132,7 +132,7 @@ async function workTheQueue(
     if (result.kind === "interrupted") {
       // Ctrl+C: Bounce the in-flight Card and land the report before cli.ts exits 130.
       const reason = "interrupted by user during Night Run";
-      await retry(() => deps.linear.bounce(card, reason));
+      await retry(() => deps.tracker.bounce(card, reason));
       report.bounced.push({ card, reason, durationMs, timedOut: false });
       deps.runLog.log(`${card.identifier} interrupted after ${formatDuration(durationMs)}; Bounced: ${reason}`);
       windDownInterrupted(deps, plan, report, index + 1);
@@ -140,11 +140,11 @@ async function workTheQueue(
       break;
     }
     if (result.kind === "success") {
-      await retry(() => deps.linear.markInReview(card, result.prUrls));
+      await retry(() => deps.tracker.markInReview(card, result.prUrls));
       report.ran.push({ card, prUrls: result.prUrls, durationMs });
       deps.runLog.log(`${card.identifier} done in ${formatDuration(durationMs)}: ${result.prUrls.join(" ")}`);
     } else {
-      await retry(() => deps.linear.bounce(card, result.reason));
+      await retry(() => deps.tracker.bounce(card, result.reason));
       report.bounced.push({ card, reason: result.reason, durationMs, timedOut: result.kind === "timeout" });
       const how = result.kind === "timeout" ? "timed out" : "failed";
       deps.runLog.log(`${card.identifier} ${how} after ${formatDuration(durationMs)}; Bounced: ${result.reason}`);

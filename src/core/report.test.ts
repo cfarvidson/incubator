@@ -78,7 +78,7 @@ describe("renderMorningReport", () => {
         "- CFA-40 Broke midway - Bounced after 12m: Card Session for CFA-40 exited with status 1",
         "- CFA-41 Got stuck - timed out after 2h 00m: Card Session for CFA-41 hit the 2h Duration Cap and was stopped",
         "",
-        "## Excluded (team not onboarded)",
+        "## Excluded (not onboarded)",
         "",
         "- CFA-96 From an IRIS-like team - Team not onboarded: it has no `needs-info` label, so a Bounce cannot land",
         "",
@@ -165,7 +165,7 @@ describe("renderPlan", () => {
       "  - CFA-30 Underspecified",
       "    Brief has no Repo Line (`Repo: owner/name`)",
       "",
-      "  Would exclude (no Linear writes):",
+      "  Would exclude (no tracker writes):",
       "  - CFA-96 From an IRIS-like team",
       "    Team not onboarded: it has no `needs-info` label, so a Bounce cannot land",
     ]);
@@ -209,13 +209,13 @@ describe("renderDryRunSummary", () => {
       ],
       excluded: [],
     });
-    expect(summary).toEqual(["", "  1 runnable, 2 bounced, 0 excluded. No Linear writes, no sessions, no worktrees."]);
+    expect(summary).toEqual(["", "  1 runnable, 2 bounced, 0 excluded. No tracker writes, no sessions, no worktrees."]);
   });
 });
 
 describe("renderAborted", () => {
   it("confirms nothing was touched", () => {
-    expect(renderAborted()).toEqual(["", "Aborted. No Linear writes, no sessions, no worktrees."]);
+    expect(renderAborted()).toEqual(["", "Aborted. No tracker writes, no sessions, no worktrees."]);
   });
 });
 

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import type { ClaudeProfile } from "../claude-profile.js";
 import type { DurationCap } from "../core/duration-cap.js";
 import type { CardExecutorPort, CardSessionResult, RunnableCard } from "../core/types.js";
-import { cardSessionPolicy } from "./session-policy.js";
+import { cardSessionPolicy, type TrackerSessionHints } from "./session-policy.js";
 import { makeSessionRenderer } from "./session-renderer.js";
 import { makeProcessSupervisor, type ProcessEnd } from "./supervised-process.js";
 import { makeWorktrees } from "./worktree.js";
@@ -14,6 +14,8 @@ export interface ExecutorOptions {
   model: string | null;
   /** The Claude Profile every Card Session of the night runs with. */
   profile: ClaudeProfile;
+  /** How a Card Session may comment on its Card; supplied by the active tracker. */
+  sessionHints: TrackerSessionHints;
   /** Run Log line, so an interrupted night is reconstructable in the morning. */
   log: (message: string) => void;
 }
@@ -38,7 +40,10 @@ export function makeCardExecutor(options: ExecutorOptions): CardExecutorPort {
       const worktreePath = worktrees.ensure(runnable);
 
       const renderer = makeSessionRenderer();
-      const session = await supervisor.run(options.profile.command, cardSessionPolicy.cliArgs(runnable, options.model), {
+      const session = await supervisor.run(
+        options.profile.command,
+        cardSessionPolicy.cliArgs(runnable, options.model, options.sessionHints),
+        {
         cwd: worktreePath,
         env: { ...process.env, ...options.profile.env },
         capMs: options.durationCap.ms,

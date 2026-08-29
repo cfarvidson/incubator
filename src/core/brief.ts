@@ -20,9 +20,13 @@ export const bounceReasons = {
 
 export type BriefCheck = { runnable: true; repo: string } | { runnable: false; reason: string };
 
-/** Checks a Brief against the contract: the target repo, or the first Bounce reason. */
-export function checkBrief(brief: string): BriefCheck {
-  const repo = brief.match(REPO_LINE)?.[1];
+/**
+ * Checks a Brief against the contract: the target repo, or the first Bounce reason.
+ * `homeRepo` is the repo the Card itself lives in, when the tracker knows it (GitHub);
+ * a Brief without a Repo Line targets it instead of Bouncing.
+ */
+export function checkBrief(brief: string, homeRepo?: string): BriefCheck {
+  const repo = brief.match(REPO_LINE)?.[1] ?? homeRepo;
   if (!repo) return { runnable: false, reason: bounceReasons.noRepoLine };
   if (!GOAL_HEADING.test(brief)) return { runnable: false, reason: bounceReasons.noGoal };
   if (!VERIFICATION.test(brief)) return { runnable: false, reason: bounceReasons.noVerification };

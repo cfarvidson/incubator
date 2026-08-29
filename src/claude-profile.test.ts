@@ -41,9 +41,27 @@ describe("resolveClaudeProfile", () => {
     });
   });
 
-  it("refuses a required run without --claude, listing the configured profiles", () => {
+  it("refuses a required run without --claude or a profile default, listing the configured profiles", () => {
     expect(() => resolveClaudeProfile(["--run"], CLAUDES, { required: true })).toThrow(
-      'A Night Run requires --claude <name>. Configured Claude Profiles: "dclaude", "wclaude"',
+      'A Night Run requires --claude <name> (or a "claude" default on the profile). Configured Claude Profiles: "dclaude", "wclaude"',
+    );
+  });
+
+  it("falls back to the Tracker Profile's default when --claude is omitted", () => {
+    expect(resolveClaudeProfile(["--run"], CLAUDES, { required: true, defaultName: "dclaude" })?.name).toBe("dclaude");
+    // Also on a dry run, so the Plan header shows the claude the night would use.
+    expect(resolveClaudeProfile([], CLAUDES, { required: false, defaultName: "dclaude" })?.name).toBe("dclaude");
+  });
+
+  it("lets --claude outrank the Tracker Profile's default", () => {
+    expect(
+      resolveClaudeProfile(["--claude", "wclaude"], CLAUDES, { required: true, defaultName: "dclaude" })?.name,
+    ).toBe("wclaude");
+  });
+
+  it("validates the Tracker Profile's default like any other name", () => {
+    expect(() => resolveClaudeProfile([], CLAUDES, { required: true, defaultName: "xclaude" })).toThrow(
+      'Unknown Claude Profile "xclaude"',
     );
   });
 

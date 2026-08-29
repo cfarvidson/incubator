@@ -1,7 +1,7 @@
 import { PRIORITY_NAMES } from "./plan.js";
 import type { BouncedCard, MorningReport, Plan } from "./types.js";
 
-const NOTHING_TOUCHED = "No Linear writes, no sessions, no worktrees.";
+const NOTHING_TOUCHED = "No tracker writes, no sessions, no worktrees.";
 
 /** Renders tonight's Plan for the terminal: run order with priorities, Bounces, and exclusions. */
 export function renderPlan(plan: Plan, claudeProfile: string | null): string[] {
@@ -25,7 +25,7 @@ export function renderPlan(plan: Plan, claudeProfile: string | null): string[] {
   }
 
   if (plan.excluded.length > 0) {
-    lines.push("", "  Would exclude (no Linear writes):");
+    lines.push("", "  Would exclude (no tracker writes):");
     for (const e of plan.excluded) {
       lines.push(`  - ${e.card.identifier} ${e.card.title}`, `    ${e.reason}`);
     }
@@ -104,7 +104,7 @@ export function renderMorningReport(date: string, claudeProfile: string, report:
     }
   }
   if (report.excluded.length > 0) {
-    lines.push("", "## Excluded (team not onboarded)", "");
+    lines.push("", "## Excluded (not onboarded)", "");
     for (const e of report.excluded) {
       lines.push(`- ${e.card.identifier} ${e.card.title} - ${e.reason}`);
     }

@@ -6,7 +6,7 @@ import type { Card, PlanDeps } from "./types.js";
 
 function deps(cards: Card[], overrides: Partial<PlanDeps> = {}, stranded: Card[] = []): PlanDeps {
   return {
-    linear: { fetchNightQueue: async () => cards, fetchStranded: async () => stranded },
+    tracker: { fetchNightQueue: async () => cards, fetchStranded: async () => stranded },
     resolveClone: (repo) => `/clones/${repo.split("/")[1]}`,
     ...overrides,
   };
@@ -18,21 +18,21 @@ describe("planNight", () => {
     expect(plan).toEqual({ runnable: [], bounced: [], excluded: [] });
   });
 
-  it("excludes a Card whose team has no needs-info label, since a Bounce could not land", async () => {
-    const notOnboarded = card({ identifier: "CFA-16", teamHasNeedsInfo: false });
+  it("excludes a Card that cannot Bounce (no needs-info label in reach)", async () => {
+    const notOnboarded = card({ identifier: "CFA-16", canBounce: false });
     const plan = await planNight(deps([notOnboarded]));
     expect(plan.runnable).toEqual([]);
     expect(plan.bounced).toEqual([]);
     expect(plan.excluded).toEqual([
       {
         card: expect.objectContaining({ identifier: "CFA-16" }),
-        reason: "Team not onboarded: it has no `needs-info` label, so a Bounce cannot land",
+        reason: "Not onboarded: no `needs-info` label exists where this Card lives, so a Bounce cannot land",
       },
     ]);
   });
 
-  it("excludes rather than bounces when the team lacks needs-info, even if the Brief is also invalid", async () => {
-    const notOnboarded = card({ identifier: "CFA-17", teamHasNeedsInfo: false, brief: "no repo line here" });
+  it("excludes rather than bounces when no Bounce can land, even if the Brief is also invalid", async () => {
+    const notOnboarded = card({ identifier: "CFA-17", canBounce: false, brief: "no repo line here" });
     const plan = await planNight(deps([notOnboarded]));
     expect(plan.bounced).toEqual([]);
     expect(plan.excluded.map((e) => e.card.identifier)).toEqual(["CFA-17"]);
@@ -59,6 +59,23 @@ describe("planNight", () => {
     expect(plan.runnable).toEqual([]);
     expect(plan.bounced).toEqual([
       { card: expect.objectContaining({ identifier: "CFA-11" }), reason: bounceReasons.noRepoLine },
+    ]);
+  });
+
+  it("targets the Card's home repo when the Brief has no Repo Line and the tracker knows one", async () => {
+    const githubCard = card({
+      identifier: "cfarvidson/example#7",
+      homeRepo: "cfarvidson/example",
+      brief: "## What to build\nStuff.\n\n## Acceptance criteria\n- [ ] Done",
+    });
+    const plan = await planNight(deps([githubCard]));
+    expect(plan.bounced).toEqual([]);
+    expect(plan.runnable).toEqual([
+      {
+        card: expect.objectContaining({ identifier: "cfarvidson/example#7" }),
+        repo: "cfarvidson/example",
+        clonePath: "/clones/example",
+      },
     ]);
   });
 
@@ -123,14 +140,14 @@ describe("planNight", () => {
     ]);
   });
 
-  it("excludes a Stranded Card whose team lacks needs-info, since a Bounce could not land", async () => {
-    const strandedCard = card({ identifier: "CFA-98", teamHasNeedsInfo: false });
+  it("excludes a Stranded Card that cannot Bounce", async () => {
+    const strandedCard = card({ identifier: "CFA-98", canBounce: false });
     const plan = await planNight(deps([], {}, [strandedCard]));
     expect(plan.bounced).toEqual([]);
     expect(plan.excluded.map((e) => e.card.identifier)).toEqual(["CFA-98"]);
   });
 
-  it("orders runnable Cards by Linear priority: urgent first, no-priority last", async () => {
+  it("orders runnable Cards by priority: urgent first, no-priority last", async () => {
     const plan = await planNight(
       deps([
         card({ identifier: "CFA-none", priority: 0 }),
