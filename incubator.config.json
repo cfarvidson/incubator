@@ -3,9 +3,17 @@
   "stopTime": "07:00",
   "harnesses": {
     "dclaude": { "kind": "claude" },
-    "wclaude": { "kind": "claude", "env": { "CLAUDE_CONFIG_DIR": "~/.claude-work" } },
+    "wclaude": {
+      "kind": "claude",
+      "env": { "CLAUDE_CONFIG_DIR": "~/.claude-work" }
+    },
     "zcodex": { "kind": "codex", "command": "zcodex" },
-    "wcodex": { "kind": "codex", "command": "wcodex" }
+    "wcodex": { "kind": "codex", "command": "wcodex" },
+    "grok": {
+      "kind": "custom",
+      "command": "grok",
+      "args": ["-p", "{prompt}", "--output-format", "streaming-messages-json"]
+    }
   },
   "profiles": {
     "work": {
@@ -27,6 +35,15 @@
       },
       "cloneRoots": ["~/code"],
       "harness": "dclaude"
+    },
+    "private-grok": {
+      "tracker": {
+        "kind": "github",
+        "scope": ["cfarvidson/kurir-ios", "cfarvidson/kurir-server"],
+        "assumeAssignee": true
+      },
+      "cloneRoots": ["~/code"],
+      "harness": "grok"
     }
   },
   "defaultProfile": "work"
