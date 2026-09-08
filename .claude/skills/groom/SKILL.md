@@ -43,7 +43,7 @@ Work through the list with the user, most-blocked first. For each Card:
 
 An Excluded Card is blocked on its team/repo, not its Brief: offer to onboard it (create the missing labels per the README) or to move the Card somewhere onboarded.
 
-Never widen scope while rewriting. A Brief needing more than a night should be split - offer to create the follow-up Card - or Parked.
+One Card in, the same Card out. Grooming never creates Cards: no follow-ups, no split-offs, no "phase 2" tickets. If the scope genuinely has to grow for the Card to be runnable (a missing migration, a prerequisite refactor), widen it inside this Card's Brief and say so in the diagnosis. A Brief still too big for one night is trimmed to what fits, with the rest noted under the goal heading as out of scope - or the Card is Parked.
 
 ## 4. Confirm
 
